@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.freepark.cloud</groupId>
+        <artifactId>freepark-cloud-simple-backend</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>freepark-cloud-simple-settings</artifactId>
+    <name>freepark-cloud-simple-settings</name>
+    <description>系统配置模块：区域与语言 / 车牌颜色等全局站点配置（参考 freepark local_server 的 SiteSettings / SystemSettings）</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.freepark.cloud</groupId>
+            <artifactId>freepark-cloud-simple-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- 依赖用户模块：复用账号状态校验（业务写操作仅启用状态管理员可执行） -->
+        <dependency>
+            <groupId>com.freepark.cloud</groupId>
+            <artifactId>freepark-cloud-simple-user</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+    </dependencies>
+</project>

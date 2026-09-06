@@ -1,0 +1,128 @@
+export default {
+  common: {
+    brand: 'FreePark',
+    platform: 'Admin Console',
+    language: 'Language',
+    zhCN: '中文',
+    en: 'English',
+    logout: 'Log out',
+    logoutConfirm: 'Are you sure you want to log out?',
+    logoutTitle: 'Confirm',
+    logoutSuccess: 'Signed out',
+    cancel: 'Cancel',
+    confirm: 'OK',
+    switchToClassic: 'Classic mode',
+    switchToAi: 'AI mode',
+    modeClassic: 'Classic',
+    modeAi: 'AI Chat',
+    requestFailed: 'Request failed, please try again later.'
+  },
+  login: {
+    title: 'Admin Console',
+    desc: 'One-stop parking operations console. Sign in to continue.',
+    username: 'Username',
+    password: 'Password',
+    usernameRequired: 'Please enter username',
+    passwordRequired: 'Please enter password',
+    submit: 'Enter console',
+    success: 'Signed in',
+    failed: 'Sign-in failed. Please try again.'
+  },
+  classic: {
+    overview: 'Overview',
+    overviewTitle: 'Overview',
+    welcomeTitle: 'Welcome to FreePark',
+    welcomeLead:
+      'The parking operations console is ready. Lots, orders, and devices will be added next.',
+    statusTitle: 'Current status',
+    statusBody:
+      'You are signed in. Auth and session are available. Business modules will expand in this layout.',
+    lotLabel: 'LOT A',
+    placeholderBody: 'This page is a placeholder. Real business features will be connected later.'
+  },
+  menu: {
+    overview: 'Overview',
+    sectionLot: 'Lot Management',
+    lots: 'Parking Lots',
+    lotMap: 'Lot Map',
+    lotMapEdit: 'Edit Map',
+    lanes: 'Lane Management',
+    spaces: 'Parking Spaces',
+    booths: 'Booths',
+    internalVehicles: 'Internal Vehicles',
+    sectionAccess: 'Access Management',
+    whitelist: 'Whitelist',
+    blacklist: 'Blacklist',
+    patternAllowlist: 'Pattern Allowlist',
+    accessJudgment: 'Access Judgment',
+    sectionParking: 'Parking Management',
+    parkingSessions: 'Parking Sessions',
+    billingRules: 'Billing Rules',
+    generalBillingRules: '24-Hour Billing Rules',
+    dailyBillingRules: 'Daily Billing Rules',
+    dateManagement: 'Date Management',
+    system: 'System',
+    systemAdmins: 'Administrators',
+    systemSettings: 'System Settings'
+  },
+  userMgmt: {
+    searchPlaceholder: 'Search username / nickname',
+    search: 'Search',
+    reset: 'Reset',
+    add: 'Add administrator',
+    username: 'Username',
+    nickname: 'Nickname',
+    role: 'Role',
+    roleSuperAdmin: 'Super admin',
+    roleAdmin: 'Admin',
+    status: 'Status',
+    enabled: 'Enabled',
+    disabled: 'Disabled',
+    createdAt: 'Created at',
+    actions: 'Actions',
+    resetPwd: 'Reset password',
+    dialogTitle: 'Add administrator',
+    dialogUsername: 'Username',
+    dialogNickname: 'Nickname',
+    dialogPassword: 'Initial password',
+    usernamePlaceholder: 'Letters, digits or underscores, 3-64 chars',
+    nicknamePlaceholder: 'Enter nickname (optional)',
+    passwordPlaceholder: 'At least 6 characters',
+    usernameRule: 'Username must be 3-64 letters, digits or underscores',
+    passwordRule: 'Password must be at least 6 characters',
+    createSuccess: 'Administrator created',
+    statusSuccess: 'Operation completed',
+    resetPwdSuccess: 'Password has been reset',
+    emptyList: 'No administrator accounts yet. Click "Add administrator" in the top-right to create one.',
+    noAccessTitle: 'Access denied',
+    noAccessDesc: 'This page is only visible to super administrators. Regular admins cannot manage accounts.',
+    backToOverview: 'Back to overview',
+    disableConfirm: 'Disable account {name}? It will not be able to sign in.',
+    enableConfirm: 'Enable account {name}?',
+    resetPwdConfirm: 'Reset the password of account {name}? Share the new password with them afterwards.',
+    cannotDisableSelf: 'You cannot disable the account you are signed in with',
+    superAdminProtected: 'The super administrator account cannot be disabled',
+    self: 'you'
+  },
+  ai: {
+    title: 'AI Assistant',
+    subtitle: 'Local mock chat',
+    placeholder: 'Ask something, e.g. How do I check lot status?',
+    send: 'Send',
+    thinking: 'Thinking…',
+    emptyHint: 'Ask the assistant to start an operations chat',
+    welcome:
+      'Hi, I am the FreePark AI assistant (local mock). Ask about lots, orders, or devices. A real model will be wired later.',
+    replies: {
+      parking:
+        'Lot status is coming soon. You will monitor occupancy, barriers, and live traffic under Lots in the sidebar.',
+      order:
+        'Order management will cover transient billing, promotions, and refunds. For now, auth and session are ready.',
+      device:
+        'Device management will track barriers, cameras, and sensors online. Explore the classic console layout first.',
+      help: 'Try asking about lot status, orders, or devices — or switch to Classic mode to browse Overview.',
+      fallback:
+        'Got your question (mock reply). This is a local demo without an LLM. Try “lot”, “order”, or “device”.'
+    }
+  }
+}

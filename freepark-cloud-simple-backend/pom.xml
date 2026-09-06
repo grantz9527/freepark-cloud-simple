@@ -21,18 +21,42 @@
     <modules>
         <!-- 依赖启动模块：负责装配各功能模块并作为应用启动入口 -->
         <module>freepark-cloud-simple-startup</module>
-        <!-- 后续新增功能模块在此追加，例如 freepark-cloud-simple-user、freepark-cloud-simple-parking -->
+        <!-- 通用基础模块：统一返回结构、认证/权限等 -->
+        <module>freepark-cloud-simple-common</module>
+        <!-- 用户功能模块：账号/登录/权限 -->
+        <module>freepark-cloud-simple-user</module>
+        <!-- 车场业务模块：车场管理/通行管理/停车流水（参考 freepark local_server 子集） -->
+        <module>freepark-cloud-simple-parking</module>
+        <!-- 计费模块：计费日期管理/计费规则 -->
+        <module>freepark-cloud-simple-billing</module>
+        <!-- 系统配置模块：区域与语言 / 车牌颜色 -->
+        <module>freepark-cloud-simple-settings</module>
     </modules>
 
     <properties>
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <jjwt.version>0.12.6</jjwt.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
-            <!-- 各业务子模块统一在此登记版本，便于 startup 引用 -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>

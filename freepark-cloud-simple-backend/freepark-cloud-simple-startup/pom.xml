@@ -21,12 +21,33 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- 后续功能子模块在此按需引入，例如：
+        <!-- 用户功能模块 -->
         <dependency>
             <groupId>com.freepark.cloud</groupId>
             <artifactId>freepark-cloud-simple-user</artifactId>
+            <version>${project.version}</version>
         </dependency>
-        -->
+
+        <!-- 车场业务模块：车场管理 / 通行管理 / 停车流水 -->
+        <dependency>
+            <groupId>com.freepark.cloud</groupId>
+            <artifactId>freepark-cloud-simple-parking</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- 计费模块：计费日期管理 / 计费规则 -->
+        <dependency>
+            <groupId>com.freepark.cloud</groupId>
+            <artifactId>freepark-cloud-simple-billing</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- 系统配置模块：区域与语言 / 车牌颜色 -->
+        <dependency>
+            <groupId>com.freepark.cloud</groupId>
+            <artifactId>freepark-cloud-simple-settings</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
     <build>

@@ -1,5 +1,7 @@
 spring:
   application:
     name: freepark-cloud-simple
+  profiles:
+    active: dev
 server:
   port: 8080

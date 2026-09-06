@@ -26,3 +26,9 @@ Thumbs.db
 # Env / secrets
 .env
 *.local
+application-dev.yml
+**/application-dev.yml
+
+# One-off local ops scripts (do not commit)
+fp_backup_before_tz.sql
+migrate_tz.sql
