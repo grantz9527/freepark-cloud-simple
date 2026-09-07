@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
 import { useBiText, type BiDict } from '../utils/biText'
+import { currencyNameOf, currencyOptionLabel } from '../utils/currency'
 
 const d: BiDict = {
   loading: { 'zh-CN': '正在加载配置…', en: 'Loading settings…' },
@@ -70,6 +71,17 @@ const d: BiDict = {
   colorSAPPHIRE: { 'zh-CN': '蓝宝石色', en: 'Sapphire' },
   colorRUBY: { 'zh-CN': '红宝石色', en: 'Ruby' },
   colorOTHER: { 'zh-CN': '其他', en: 'Other' },
+  feeCurrency: { 'zh-CN': '收费金额单位', en: 'Fee Currency' },
+  feeCurrencyHint: {
+    'zh-CN': '站点计费金额的录入与展示单位。勾选允许使用的币种并指定默认币种；默认币种必须是允许币种之一。',
+    en: 'The unit used when entering and showing billing amounts. Check the allowed currencies and set the default one; the default must be within the allowed list.'
+  },
+  allowedCurrencies: { 'zh-CN': '允许的币种', en: 'Allowed currencies' },
+  defaultCurrency: { 'zh-CN': '默认币种', en: 'Default currency' },
+  atLeastOneCurrency: {
+    'zh-CN': '至少保留一种允许的币种',
+    en: 'Keep at least one allowed currency'
+  },
   atLeastOne: { 'zh-CN': '至少保留一种允许的车牌颜色', en: 'Keep at least one allowed plate color' },
   saved: { 'zh-CN': '配置已保存', en: 'Settings saved' },
   save: { 'zh-CN': '保存配置', en: 'Save settings' },
@@ -86,9 +98,12 @@ interface SystemSettingsData {
   timezone: string
   defaultPlateColor: string
   allowedPlateColors: string[]
+  defaultCurrency: string
+  allowedCurrencies: string[]
   supportedLocales: string[]
   supportedTimezones: string[]
   supportedPlateColors: string[]
+  supportedCurrencies: string[]
   updatedAt: string
 }
 
@@ -100,9 +115,12 @@ const defaultLocale = ref('zh-CN')
 const timezone = ref('Asia/Shanghai')
 const defaultPlateColor = ref('BLUE')
 const allowedPlateColors = ref<string[]>([])
+const defaultCurrency = ref('CNY')
+const allowedCurrencies = ref<string[]>([])
 const supportedLocales = ref<string[]>([])
 const supportedTimezones = ref<string[]>([])
 const supportedPlateColors = ref<string[]>([])
+const supportedCurrencies = ref<string[]>([])
 const updatedAt = ref('')
 
 /** 颜色块配色：与参考实现 PlateColor 枚举对应的近似底色 */
@@ -180,6 +198,43 @@ watch(allowedPlateColors, (colors) => {
   }
 })
 
+/** 默认币种下拉展示全部支持币种，但只能选择“已允许”的币种 */
+const defaultCurrencyOptions = computed(() =>
+  supportedCurrencies.value.map((code) => ({
+    value: code,
+    label: currencyOptionLabel(code, locale.value),
+    disabled: !allowedCurrencies.value.includes(code)
+  }))
+)
+
+watch(allowedCurrencies, (codes) => {
+  if (codes.length > 0 && !codes.includes(defaultCurrency.value)) {
+    defaultCurrency.value = codes[0]
+  }
+})
+
+function currencyName(code: string): string {
+  return currencyNameOf(code, locale.value)
+}
+
+function isAllowedCurrency(code: string): boolean {
+  return allowedCurrencies.value.includes(code)
+}
+
+function toggleCurrency(code: string, checked: boolean): void {
+  if (checked) {
+    if (!allowedCurrencies.value.includes(code)) {
+      allowedCurrencies.value = [...allowedCurrencies.value, code]
+    }
+    return
+  }
+  if (allowedCurrencies.value.length <= 1) {
+    ElMessage.warning(t('atLeastOneCurrency'))
+    return
+  }
+  allowedCurrencies.value = allowedCurrencies.value.filter((item) => item !== code)
+}
+
 function colorLabel(color: string): string {
   return t(`color${color}`) || color
 }
@@ -256,9 +311,12 @@ async function loadSettings(): Promise<void> {
     timezone.value = view.timezone
     defaultPlateColor.value = view.defaultPlateColor
     allowedPlateColors.value = [...view.allowedPlateColors]
+    defaultCurrency.value = view.defaultCurrency
+    allowedCurrencies.value = [...view.allowedCurrencies]
     supportedLocales.value = [...view.supportedLocales]
     supportedTimezones.value = [...view.supportedTimezones]
     supportedPlateColors.value = [...view.supportedPlateColors]
+    supportedCurrencies.value = [...view.supportedCurrencies]
     updatedAt.value = view.updatedAt
   } catch (error) {
     ElMessage.error(error instanceof Error && error.message ? error.message : t('loadFailed'))
@@ -272,18 +330,26 @@ async function handleSave(): Promise<void> {
     ElMessage.warning(t('atLeastOne'))
     return
   }
+  if (allowedCurrencies.value.length === 0) {
+    ElMessage.warning(t('atLeastOneCurrency'))
+    return
+  }
   saving.value = true
   try {
     const view = await request.put<never, SystemSettingsData>('/system/settings', {
       defaultLocale: defaultLocale.value,
       timezone: timezone.value,
       defaultPlateColor: defaultPlateColor.value,
-      allowedPlateColors: allowedPlateColors.value
+      allowedPlateColors: allowedPlateColors.value,
+      defaultCurrency: defaultCurrency.value,
+      allowedCurrencies: allowedCurrencies.value
     })
     defaultLocale.value = view.defaultLocale
     timezone.value = view.timezone
     defaultPlateColor.value = view.defaultPlateColor
     allowedPlateColors.value = [...view.allowedPlateColors]
+    defaultCurrency.value = view.defaultCurrency
+    allowedCurrencies.value = [...view.allowedCurrencies]
     updatedAt.value = view.updatedAt
     ElMessage.success(t('saved'))
   } catch (error) {
@@ -357,6 +423,43 @@ onMounted(loadSettings)
             <el-select v-model="defaultPlateColor" class="field">
               <el-option
                 v-for="option in defaultColorOptions"
+                :key="option.value"
+                :value="option.value"
+                :label="option.label"
+                :disabled="option.disabled"
+              />
+            </el-select>
+          </el-form-item>
+        </div>
+
+        <el-divider />
+
+        <h3 class="group-title">{{ t('feeCurrency') }}</h3>
+        <p class="group-hint">{{ t('feeCurrencyHint') }}</p>
+
+        <div class="colors-block">
+          <span class="field-label">{{ t('allowedCurrencies') }}</span>
+          <div class="currency-grid">
+            <label
+              v-for="code in supportedCurrencies"
+              :key="code"
+              class="currency-option"
+              :class="{ disabled: isAllowedCurrency(code) && allowedCurrencies.length === 1 }"
+            >
+              <el-checkbox
+                :model-value="isAllowedCurrency(code)"
+                @change="(checked: boolean | string | number) => toggleCurrency(code, Boolean(checked))"
+              />
+              <span class="chip currency-chip">{{ code }} · {{ currencyName(code) }}</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field-grid single">
+          <el-form-item :label="t('defaultCurrency')">
+            <el-select v-model="defaultCurrency" class="field">
+              <el-option
+                v-for="option in defaultCurrencyOptions"
                 :key="option.value"
                 :value="option.value"
                 :label="option.label"
@@ -444,7 +547,14 @@ onMounted(loadSettings)
   gap: 10px 18px;
 }
 
-.color-option {
+.currency-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+
+.color-option,
+.currency-option {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -452,7 +562,8 @@ onMounted(loadSettings)
   user-select: none;
 }
 
-.color-option.disabled {
+.color-option.disabled,
+.currency-option.disabled {
   opacity: 0.65;
 }
 
@@ -464,6 +575,15 @@ onMounted(loadSettings)
   border-radius: 999px;
   font-size: 0.8rem;
   border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.currency-chip {
+  background: var(--fp-bg-soft, #f2f3f5);
+  border-color: var(--el-border-color, #dcdfe6);
+  font-weight: 600;
+  color: var(--fp-text, #2f3640);
+  min-width: 72px;
+  white-space: nowrap;
 }
 
 .form-footer {

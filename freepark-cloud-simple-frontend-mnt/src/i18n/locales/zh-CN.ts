@@ -59,10 +59,12 @@ export default {
     generalBillingRules: '24小时制计费规则',
     dailyBillingRules: '每日制计费规则',
     dateManagement: '日期管理',
+    billingCycleProfiles: '计费周期',
     system: '系统管理',
     systemAdmins: '管理员管理',
     systemSettings: '系统配置',
-    edgeComputing: '边缘计算配置'
+    edgeComputing: '边缘计算配置',
+    edgeHeartbeat: '边缘监控'
   },
   userMgmt: {
     searchPlaceholder: '搜索用户名 / 昵称',

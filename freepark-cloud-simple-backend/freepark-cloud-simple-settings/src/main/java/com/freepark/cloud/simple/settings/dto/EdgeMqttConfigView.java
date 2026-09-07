@@ -13,6 +13,8 @@ import java.util.List;
  * @param username                  MQTT 用户名（可空）
  * @param reportSubscribeTopic      上报数据订阅主题（停车系统发布→云端订阅，可空）
  * @param configSyncPublishTopic    配置同步发布主题（云端发布→边缘服务同步到本地，可空）
+ * @param heartbeatSubscribeTopic   上行心跳订阅主题（云端订阅各车场心跳，可空；空=不启用心跳监控）
+ * @param heartbeatOfflineSeconds   心跳离线判定阈值（秒）
  * @param qos                       消息服务质量（0/1/2）
  * @param configSyncIntervalSeconds 配置同步周期（秒）
  * @param keepAliveSeconds          保活间隔（秒）
@@ -27,6 +29,8 @@ public record EdgeMqttConfigView(
         String username,
         String reportSubscribeTopic,
         String configSyncPublishTopic,
+        String heartbeatSubscribeTopic,
+        int heartbeatOfflineSeconds,
         int qos,
         int configSyncIntervalSeconds,
         int keepAliveSeconds,

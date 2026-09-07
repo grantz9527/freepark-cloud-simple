@@ -61,10 +61,12 @@ export default {
     generalBillingRules: '24-Hour Billing Rules',
     dailyBillingRules: 'Daily Billing Rules',
     dateManagement: 'Date Management',
+    billingCycleProfiles: 'Billing Cycles',
     system: 'System',
     systemAdmins: 'Administrators',
     systemSettings: 'System Settings',
-    edgeComputing: 'Edge Computing'
+    edgeComputing: 'Edge Computing',
+    edgeHeartbeat: 'Edge Monitoring'
   },
   userMgmt: {
     searchPlaceholder: 'Search username / nickname',

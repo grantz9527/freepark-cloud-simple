@@ -138,6 +138,10 @@ public class EdgeMqttConfigService {
                 EdgeMqttConfigOptions.normalizeOptionalTopic(request.reportSubscribeTopic()));
         config.setConfigSyncPublishTopic(EdgeMqttConfigOptions.normalizeConfigSyncPublishTopicPrefix(
                 request.configSyncPublishTopic()));
+        config.setHeartbeatSubscribeTopic(
+                EdgeMqttConfigOptions.normalizeOptionalTopic(request.heartbeatSubscribeTopic()));
+        config.setHeartbeatOfflineSeconds(EdgeMqttConfigOptions.validateHeartbeatOfflineSeconds(
+                request.heartbeatOfflineSeconds()));
         config.setQos(EdgeMqttConfigOptions.validateQos(request.qos()));
         config.setConfigSyncIntervalSeconds(EdgeMqttConfigOptions.validateConfigSyncIntervalSeconds(
                 request.configSyncIntervalSeconds()));
@@ -168,6 +172,8 @@ public class EdgeMqttConfigService {
                 config.getUsername(),
                 config.getReportSubscribeTopic(),
                 config.getConfigSyncPublishTopic(),
+                config.getHeartbeatSubscribeTopic(),
+                config.getHeartbeatOfflineSeconds(),
                 config.getQos(),
                 config.getConfigSyncIntervalSeconds(),
                 config.getKeepAliveSeconds(),

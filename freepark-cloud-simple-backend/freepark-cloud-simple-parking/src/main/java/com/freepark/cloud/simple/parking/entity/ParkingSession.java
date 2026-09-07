@@ -11,6 +11,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import com.freepark.cloud.simple.common.time.SiteZoneTimes;
 
@@ -82,6 +83,24 @@ public class ParkingSession {
     @Column(columnDefinition = "TEXT")
     private String exitImage;
 
+    /**
+     * 应收金额快照（元）：仅在新增加场关联的写事件（入场/出入场更新）或手动「重新算费」时，
+     * 按「车场 × 车牌颜色 × 入场日期」生效的计费绑定结算并落库；未计费为 null，列表查询不重算。
+     */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal feeYuan;
+
+    /**
+     * 支付状态：仅已出场（CLOSED）流水登记；在场/已作废为 null。
+     * 关场时默认置为 UNPAID，之后由人工登记更新，不随费用重算自动变化。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16)
+    private ParkingPayStatus payStatus;
+
+    /** 支付时间：登记为「已支付」的时刻；仅已支付流水有意义。 */
+    private LocalDateTime payTime;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -100,7 +119,7 @@ public class ParkingSession {
         this.updatedAt = SiteZoneTimes.nowUtc();
     }
 
-    /** 出场匹配成功：关闭流水。 */
+    /** 出场匹配成功：关闭流水。默认支付状态为未支付（若此前未登记）。 */
     public void closeWithExit(LocalDateTime exitTime, Long laneId, String laneName,
                               Long recognitionId, String image) {
         this.status = ParkingSessionStatus.CLOSED;
@@ -109,11 +128,16 @@ public class ParkingSession {
         this.exitLaneName = laneName;
         this.exitRecognitionId = recognitionId;
         this.exitImage = image;
+        if (this.payStatus == null) {
+            this.payStatus = ParkingPayStatus.UNPAID;
+        }
     }
 
-    /** 作废流水（在场或已出场均可作废）。 */
+    /** 作废流水（在场或已出场均可作废）。作废后支付状态与时间一并清空。 */
     public void markVoided() {
         this.status = ParkingSessionStatus.VOIDED;
+        this.payStatus = null;
+        this.payTime = null;
     }
 
     public Long getId() {
@@ -242,6 +266,30 @@ public class ParkingSession {
 
     public void setExitImage(String exitImage) {
         this.exitImage = exitImage;
+    }
+
+    public BigDecimal getFeeYuan() {
+        return feeYuan;
+    }
+
+    public void setFeeYuan(BigDecimal feeYuan) {
+        this.feeYuan = feeYuan;
+    }
+
+    public ParkingPayStatus getPayStatus() {
+        return payStatus;
+    }
+
+    public void setPayStatus(ParkingPayStatus payStatus) {
+        this.payStatus = payStatus;
+    }
+
+    public LocalDateTime getPayTime() {
+        return payTime;
+    }
+
+    public void setPayTime(LocalDateTime payTime) {
+        this.payTime = payTime;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -1,4 +1,4 @@
-package com.freepark.cloud.simple.edge;
+package com.freepark.cloud.simple.parking.edge;
 
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
@@ -9,7 +9,8 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 车场作为边缘配置下发目标：仅返回“启用”且编码可作为 MQTT 主题段
+ * 车场作为边缘配置下发目标：车场业务模块提供给 settings 边缘运行时（配置同步、
+ * 心跳监控）的 SPI 实现。仅返回“启用”且编码可作为 MQTT 主题段
  * （无空白、无通配符 #/+、不含斜杠、长度合规）的车场。
  */
 @Component

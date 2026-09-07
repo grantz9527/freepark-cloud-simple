@@ -46,11 +46,29 @@ public final class MessageKeys {
     public static final String BILLING_DATE_INVALID_RANGE = "billing.date.invalidRange";
     public static final String BILLING_DATE_OVERLAP = "billing.date.overlap";
 
+    public static final String BILLING_DAILY_SLOT_OVERLAP = "billing.daily.slotOverlap";
+    public static final String BILLING_DAILY_SLOT_FREE_CONFLICT = "billing.daily.freeConflict";
+
+    public static final String BILLING_SIMULATE_INVALID_RANGE = "billing.simulate.invalidRange";
+    public static final String BILLING_SIMULATE_TOO_LONG = "billing.simulate.tooLong";
+
+    public static final String BILLING_PROFILE_NAME_REQUIRED = "billing.profile.nameRequired";
+    public static final String BILLING_PROFILE_SEGMENTS_REQUIRED = "billing.profile.segmentsRequired";
+    public static final String BILLING_PROFILE_REFERENCED = "billing.profile.referenced";
+
+    public static final String BILLING_RULE_REFERENCED = "billing.rule.referenced";
+
+    public static final String BILLING_BINDING_INVALID_RANGE = "billing.binding.invalidRange";
+    public static final String BILLING_BINDING_OVERLAP = "billing.binding.overlap";
+
     public static final String SETTINGS_INVALID_LOCALE = "settings.invalidLocale";
     public static final String SETTINGS_INVALID_TIMEZONE = "settings.invalidTimezone";
     public static final String SETTINGS_INVALID_PLATE_COLOR = "settings.invalidPlateColor";
     public static final String SETTINGS_EMPTY_PLATE_COLORS = "settings.emptyPlateColors";
     public static final String SETTINGS_DEFAULT_COLOR_NOT_ALLOWED = "settings.defaultColorNotAllowed";
+    public static final String SETTINGS_INVALID_CURRENCY = "settings.invalidCurrency";
+    public static final String SETTINGS_EMPTY_CURRENCIES = "settings.emptyCurrencies";
+    public static final String SETTINGS_DEFAULT_CURRENCY_NOT_ALLOWED = "settings.defaultCurrencyNotAllowed";
 
     public static final String EDGE_CONFIG_HOST_REQUIRED = "edge.config.hostRequired";
     public static final String EDGE_CONFIG_HOST_INVALID = "edge.config.hostInvalid";
@@ -63,6 +81,7 @@ public final class MessageKeys {
     public static final String EDGE_CONFIG_TOPIC_TOO_LONG = "edge.config.topicTooLong";
     public static final String EDGE_CONFIG_TOPIC_PREFIX_INVALID = "edge.config.topicPrefixInvalid";
     public static final String EDGE_CONFIG_CREDENTIAL_TOO_LONG = "edge.config.credentialTooLong";
+    public static final String EDGE_CONFIG_HEARTBEAT_OFFLINE_INVALID = "edge.config.heartbeatOfflineInvalid";
     public static final String EDGE_CONFIG_TEST_FAILED = "edge.config.testFailed";
 
     private MessageKeys() {

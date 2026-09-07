@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 系统配置：区域与语言、车牌颜色等全局站点配置（写操作仅超级管理员）。
+ * 系统配置：区域与语言、车牌颜色、收费金额单位等全局站点配置（写操作仅超级管理员）。
  */
 @RestController
 @RequestMapping("/api/system/settings")

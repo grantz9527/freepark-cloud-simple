@@ -4,9 +4,11 @@ import com.freepark.cloud.simple.common.ApiResult;
 import com.freepark.cloud.simple.common.web.PageResult;
 import com.freepark.cloud.simple.parking.dto.CreateParkingSessionRequest;
 import com.freepark.cloud.simple.parking.dto.ParkingSessionView;
+import com.freepark.cloud.simple.parking.dto.PayStatusRequest;
 import com.freepark.cloud.simple.parking.dto.UpdateParkingSessionRequest;
 import com.freepark.cloud.simple.parking.entity.ParkingSessionStatus;
 import com.freepark.cloud.simple.parking.service.ParkingSessionService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,6 +17,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /**
  * 停车流水管理（停车管理 - 停车流水）。
@@ -34,9 +39,11 @@ public class ParkingSessionController {
             @RequestParam(required = false) Long lotId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) ParkingSessionStatus status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return ApiResult.ok(parkingSessionService.listSessions(lotId, keyword, status, page, size));
+        return ApiResult.ok(parkingSessionService.listSessions(lotId, keyword, status, startDate, endDate, page, size));
     }
 
     @GetMapping("/has-open")
@@ -62,5 +69,29 @@ public class ParkingSessionController {
     @PostMapping("/{sessionId}/void")
     public ApiResult<ParkingSessionView> voidSession(@PathVariable Long sessionId) {
         return ApiResult.ok(parkingSessionService.voidSession(sessionId));
+    }
+
+    /**
+     * 预览「重新算费」：只读计算应收金额但不落库，供前端弹窗确认；
+     * 确认后调用 /recalculate 才真正快照生效，取消则无需任何落库操作。
+     */
+    @PostMapping("/{sessionId}/fee-preview")
+    public ApiResult<BigDecimal> previewRecalculate(@PathVariable Long sessionId) {
+        return ApiResult.ok(parkingSessionService.previewRecalculate(sessionId));
+    }
+
+    /**
+     * 手动重新算费：已出场按真实出场时间、在场按「入场 ~ 当前时刻」估算，快照应收金额。
+     */
+    @PostMapping("/{sessionId}/recalculate")
+    public ApiResult<ParkingSessionView> recalculate(@PathVariable Long sessionId) {
+        return ApiResult.ok(parkingSessionService.recalculateSession(sessionId));
+    }
+
+    /** 人工登记支付状态（未支付/部分支付/已支付），仅已出场流水可登记；费用重算不自动改变它。 */
+    @PostMapping("/{sessionId}/pay-status")
+    public ApiResult<ParkingSessionView> markPayStatus(@PathVariable Long sessionId,
+                                                       @RequestBody PayStatusRequest request) {
+        return ApiResult.ok(parkingSessionService.markPayStatus(sessionId, request.status()));
     }
 }

@@ -1,6 +1,7 @@
 package com.freepark.cloud.simple.settings.entity;
 
 import com.freepark.cloud.simple.common.time.SiteZoneTimes;
+import com.freepark.cloud.simple.settings.support.EdgeMqttConfigOptions;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -58,9 +59,20 @@ public class EdgeMqttConfig {
     @Column(name = "config_sync_publish_topic", length = 255)
     private String configSyncPublishTopic;
 
-    /** 消息服务质量（0 / 1 / 2） */
+    /** 心跳订阅主题：云端订阅各车场上行心跳（可含 MQTT 通配符；空=不启用心跳监控） */
+    @Column(name = "heartbeat_subscribe_topic", length = 255)
+    private String heartbeatSubscribeTopic;
+
+    /**
+     * 心跳离线判定阈值（秒）。存量行可能为 NULL，用 Integer 承载以保证
+     * ddl-auto=update 新增可空列不破坏已有记录；读取时回落默认值。
+     */
+    @Column(name = "heartbeat_offline_seconds")
+    private Integer heartbeatOfflineSeconds = EdgeMqttConfigOptions.DEFAULT_HEARTBEAT_OFFLINE_SECONDS;
+
+    /** 消息服务质量（0 / 1 / 2）；默认 1：至少一次，适合周期整包快照下发 */
     @Column(nullable = false)
-    private int qos = 0;
+    private int qos = 1;
 
     /** 配置同步周期（秒）：云端定时下发配置到边缘服务的间隔 */
     @Column(name = "config_sync_interval_seconds", nullable = false)
@@ -158,6 +170,24 @@ public class EdgeMqttConfig {
 
     public void setConfigSyncPublishTopic(String configSyncPublishTopic) {
         this.configSyncPublishTopic = configSyncPublishTopic;
+    }
+
+    public String getHeartbeatSubscribeTopic() {
+        return heartbeatSubscribeTopic;
+    }
+
+    public void setHeartbeatSubscribeTopic(String heartbeatSubscribeTopic) {
+        this.heartbeatSubscribeTopic = heartbeatSubscribeTopic;
+    }
+
+    public int getHeartbeatOfflineSeconds() {
+        return heartbeatOfflineSeconds == null
+                ? EdgeMqttConfigOptions.DEFAULT_HEARTBEAT_OFFLINE_SECONDS
+                : heartbeatOfflineSeconds;
+    }
+
+    public void setHeartbeatOfflineSeconds(int heartbeatOfflineSeconds) {
+        this.heartbeatOfflineSeconds = heartbeatOfflineSeconds;
     }
 
     public int getQos() {

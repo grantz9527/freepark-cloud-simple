@@ -27,6 +27,19 @@
             <artifactId>freepark-cloud-simple-user</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- 依赖计费模块：停车流水按车场计费绑定结算应收金额（新增/出入场更新/重新算费时快照） -->
+        <dependency>
+            <groupId>com.freepark.cloud</groupId>
+            <artifactId>freepark-cloud-simple-billing</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- 依赖系统配置模块：实现其边缘运行时 SPI（EdgeSyncTargetSource / EdgeConfigSnapshotBuilder），
+             向云端配置同步与车场心跳监控提供“车场”维度的目标与数据 -->
+        <dependency>
+            <groupId>com.freepark.cloud</groupId>
+            <artifactId>freepark-cloud-simple-settings</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>

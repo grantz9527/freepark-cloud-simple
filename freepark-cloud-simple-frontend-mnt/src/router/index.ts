@@ -116,6 +116,12 @@ const router = createRouter({
           meta: { titleKey: 'menu.dateManagement' }
         },
         {
+          path: 'billing/cycle-profiles',
+          name: 'billing-cycle-profiles',
+          component: () => import('../views/BillingCycleProfilesView.vue'),
+          meta: { titleKey: 'menu.billingCycleProfiles' }
+        },
+        {
           path: 'system/admins',
           name: 'system-admins',
           component: () => import('../views/UserManageView.vue'),
@@ -132,6 +138,12 @@ const router = createRouter({
           name: 'edge-computing',
           component: () => import('../views/EdgeComputingView.vue'),
           meta: { titleKey: 'menu.edgeComputing' }
+        },
+        {
+          path: 'system/edge-heartbeat',
+          name: 'edge-heartbeat',
+          component: () => import('../views/EdgeHeartbeatView.vue'),
+          meta: { titleKey: 'menu.edgeHeartbeat' }
         }
       ]
     },

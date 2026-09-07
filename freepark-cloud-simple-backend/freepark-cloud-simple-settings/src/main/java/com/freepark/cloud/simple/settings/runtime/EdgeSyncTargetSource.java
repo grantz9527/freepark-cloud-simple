@@ -5,8 +5,8 @@ import java.util.List;
 /**
  * 边缘配置同步的目标来源：枚举当前应参与“云端→边缘服务”下发的车场。
  *
- * <p>接口定义在 settings（不感知具体业务实体）；由外层 startup 提供面向实际
- * 数据（如停车场表）的实现并注册为 Spring Bean。</p>
+ * <p>接口定义在 settings（不感知具体业务实体）；由提供车场数据的业务模块
+ * （如 parking）实现并注册为 Spring Bean。</p>
  */
 public interface EdgeSyncTargetSource {
 

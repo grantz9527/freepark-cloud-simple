@@ -64,6 +64,20 @@ public final class SystemSettingsOptions {
     public static final String DEFAULT_PLATE_COLOR = "BLUE";
 
     /**
+     * 币种：ISO 4217 货币代码预置列表，勾选启用后作为站点“收费金额单位”的可选项。
+     */
+    public static final List<String> SUPPORTED_CURRENCIES = List.of(
+            "CNY", "USD", "HKD", "TWD", "MOP", "JPY", "KRW", "SGD", "MYR", "THB", "VND",
+            "EUR", "GBP", "CHF", "AUD", "CAD", "NZD");
+
+    /** 默认启用的常见币种 */
+    public static final List<String> DEFAULT_ALLOWED_CURRENCIES = List.of(
+            "CNY", "USD", "HKD", "JPY", "EUR", "GBP", "SGD", "AUD", "CAD");
+
+    /** 默认币种（收费金额单位）：人民币 */
+    public static final String DEFAULT_CURRENCY = "CNY";
+
+    /**
      * 将配置的时区字符串解析为 {@link ZoneId}；非法或缺失时回退到默认时区。
      */
     public static ZoneId zoneIdOrDefault(String value) {
@@ -99,6 +113,43 @@ public final class SystemSettingsOptions {
             throw new BizException(400, MessageKeys.SETTINGS_INVALID_PLATE_COLOR);
         }
         return color;
+    }
+
+    public static String validateCurrency(String value) {
+        String currency = normalize(value);
+        if (!SUPPORTED_CURRENCIES.contains(currency)) {
+            throw new BizException(400, MessageKeys.SETTINGS_INVALID_CURRENCY);
+        }
+        return currency;
+    }
+
+    /**
+     * 去重并校验允许币种列表，至少需要一种。
+     */
+    public static List<String> normalizeAllowedCurrencies(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            throw new BizException(400, MessageKeys.SETTINGS_EMPTY_CURRENCIES);
+        }
+        List<String> result = new ArrayList<>();
+        for (String value : values) {
+            String currency = validateCurrency(value);
+            if (!result.contains(currency)) {
+                result.add(currency);
+            }
+        }
+        if (result.isEmpty()) {
+            throw new BizException(400, MessageKeys.SETTINGS_EMPTY_CURRENCIES);
+        }
+        return result;
+    }
+
+    /**
+     * 默认币种必须落在允许列表中。
+     */
+    public static void ensureDefaultCurrencyAllowed(String defaultCurrency, List<String> allowed) {
+        if (defaultCurrency == null || allowed == null || !allowed.contains(defaultCurrency)) {
+            throw new BizException(400, MessageKeys.SETTINGS_DEFAULT_CURRENCY_NOT_ALLOWED);
+        }
     }
 
     /**

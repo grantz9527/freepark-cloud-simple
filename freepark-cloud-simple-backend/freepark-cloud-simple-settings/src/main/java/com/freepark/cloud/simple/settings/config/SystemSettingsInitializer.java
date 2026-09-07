@@ -32,9 +32,12 @@ public class SystemSettingsInitializer implements ApplicationRunner {
                 SystemSettingsOptions.DEFAULT_LOCALE,
                 SystemSettingsOptions.DEFAULT_TIMEZONE,
                 SystemSettingsOptions.DEFAULT_PLATE_COLOR,
-                SystemSettingsOptions.DEFAULT_ALLOWED_PLATE_COLORS);
+                SystemSettingsOptions.DEFAULT_ALLOWED_PLATE_COLORS,
+                SystemSettingsOptions.DEFAULT_CURRENCY,
+                SystemSettingsOptions.DEFAULT_ALLOWED_CURRENCIES);
         settingsRepository.save(settings);
-        log.info("已初始化默认站点配置：locale={}, timezone={}, defaultPlateColor={}",
-                settings.getDefaultLocale(), settings.getTimezone(), settings.getDefaultPlateColor());
+        log.info("已初始化默认站点配置：locale={}, timezone={}, defaultPlateColor={}, defaultCurrency={}",
+                settings.getDefaultLocale(), settings.getTimezone(), settings.getDefaultPlateColor(),
+                settings.getDefaultCurrency());
     }
 }

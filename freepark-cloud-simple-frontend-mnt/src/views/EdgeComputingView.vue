@@ -43,6 +43,21 @@ const d: BiDict = {
     'zh-CN': '不允许包含空格或 MQTT 通配符（# / +），末尾的 / 会被自动去掉。',
     en: 'Whitespace and MQTT wildcards (# / +) are not allowed; a trailing / is trimmed automatically.'
   },
+  sectionHeartbeat: { 'zh-CN': '心跳监控', en: 'Heartbeat Monitoring' },
+  sectionHeartbeatHint: {
+    'zh-CN': '开启后，云端订阅车场上报的心跳：超过“离线判定阈值”未收到心跳即判定该车场离线，并在“边缘监控”页展示在线状态。',
+    en: 'When enabled, the cloud subscribes to lot heartbeats: a lot is flagged offline if no heartbeat arrives within the offline threshold, and its status is shown on the Edge Monitoring page.'
+  },
+  heartbeatSubscribeTopic: { 'zh-CN': '心跳订阅主题', en: 'Heartbeat subscribe topic' },
+  heartbeatSubscribeTopicPlaceholder: {
+    'zh-CN': '如 edge/heartbeat/#；留空表示关闭心跳监控',
+    en: 'e.g. edge/heartbeat/#; blank disables monitoring'
+  },
+  heartbeatOfflineSeconds: { 'zh-CN': '离线判定阈值（秒）', en: 'Offline threshold (s)' },
+  heartbeatOfflineSecondsHint: {
+    'zh-CN': '支持 MQTT 通配符；超过阈值未收到心跳即判定离线。',
+    en: 'MQTT wildcards are supported; a lot is offline after this many seconds without a heartbeat.'
+  },
   qos: { 'zh-CN': 'QoS', en: 'QoS' },
   configSyncInterval: { 'zh-CN': '配置同步周期（秒）', en: 'Config sync interval (s)' },
   keepAlive: { 'zh-CN': '保活间隔（秒）', en: 'Keep-alive (s)' },
@@ -66,6 +81,8 @@ interface EdgeMqttConfigView {
   username: string | null
   reportSubscribeTopic: string | null
   configSyncPublishTopic: string | null
+  heartbeatSubscribeTopic: string | null
+  heartbeatOfflineSeconds: number
   qos: number
   configSyncIntervalSeconds: number
   keepAliveSeconds: number
@@ -81,6 +98,8 @@ interface SavePayload {
   password: string | null
   reportSubscribeTopic: string | null
   configSyncPublishTopic: string | null
+  heartbeatSubscribeTopic: string | null
+  heartbeatOfflineSeconds: number
   qos: number
   configSyncIntervalSeconds: number
   keepAliveSeconds: number
@@ -98,15 +117,26 @@ const username = ref('')
 const password = ref('')
 const reportSubscribeTopic = ref('')
 const configSyncPublishTopic = ref('')
-const qos = ref(0)
+const heartbeatSubscribeTopic = ref('')
+const heartbeatOfflineSeconds = ref(90)
+const qos = ref(1)
 const configSyncIntervalSeconds = ref(60)
 const keepAliveSeconds = ref(60)
 const updatedAt = ref('')
 
 const qosOptions = [0, 1, 2]
 
+// 留空时自动补用的默认主题参数
+const DEFAULT_REPORT_TOPIC = 'parking/report/device/#'
+const DEFAULT_CONFIG_SYNC_PREFIX = 'cloud/config/sync'
+
 function emptyToNull(value: string): string | null {
   return value.trim() === '' ? null : value.trim()
+}
+
+/** 主题/前缀为空时补默认值，保证开箱即用 */
+function fillTopicDefault(value: string, fallback: string): string {
+  return emptyToNull(value) ?? fallback
 }
 
 function buildPayload(): SavePayload {
@@ -118,8 +148,11 @@ function buildPayload(): SavePayload {
     username: emptyToNull(username.value),
     // 密码不回显且后端按“空串保持不变”处理，这里始终携带表单值即可
     password: password.value,
-    reportSubscribeTopic: emptyToNull(reportSubscribeTopic.value),
-    configSyncPublishTopic: emptyToNull(configSyncPublishTopic.value),
+    reportSubscribeTopic: fillTopicDefault(reportSubscribeTopic.value, DEFAULT_REPORT_TOPIC),
+    configSyncPublishTopic: fillTopicDefault(configSyncPublishTopic.value, DEFAULT_CONFIG_SYNC_PREFIX),
+    // 心跳订阅主题无默认值：留空（null）即关闭心跳监控
+    heartbeatSubscribeTopic: emptyToNull(heartbeatSubscribeTopic.value),
+    heartbeatOfflineSeconds: heartbeatOfflineSeconds.value,
     qos: qos.value,
     configSyncIntervalSeconds: configSyncIntervalSeconds.value,
     keepAliveSeconds: keepAliveSeconds.value
@@ -132,8 +165,10 @@ function applyView(view: EdgeMqttConfigView): void {
   brokerPort.value = view.brokerPort
   clientId.value = view.clientId
   username.value = view.username ?? ''
-  reportSubscribeTopic.value = view.reportSubscribeTopic ?? ''
-  configSyncPublishTopic.value = view.configSyncPublishTopic ?? ''
+  reportSubscribeTopic.value = fillTopicDefault(view.reportSubscribeTopic ?? '', DEFAULT_REPORT_TOPIC)
+  configSyncPublishTopic.value = fillTopicDefault(view.configSyncPublishTopic ?? '', DEFAULT_CONFIG_SYNC_PREFIX)
+  heartbeatSubscribeTopic.value = view.heartbeatSubscribeTopic ?? ''
+  heartbeatOfflineSeconds.value = view.heartbeatOfflineSeconds
   qos.value = view.qos
   configSyncIntervalSeconds.value = view.configSyncIntervalSeconds
   keepAliveSeconds.value = view.keepAliveSeconds
@@ -313,6 +348,32 @@ onMounted(loadConfig)
           </el-form-item>
         </div>
 
+        <el-divider />
+
+        <h3 class="group-title">{{ t('sectionHeartbeat') }}</h3>
+        <p class="section-hint">{{ t('sectionHeartbeatHint') }}</p>
+        <div class="field-grid">
+          <el-form-item :label="t('heartbeatSubscribeTopic')" class="wide-item">
+            <el-input
+              v-model="heartbeatSubscribeTopic"
+              :placeholder="t('heartbeatSubscribeTopicPlaceholder')"
+              maxlength="255"
+              clearable
+              class="field"
+            />
+          </el-form-item>
+          <el-form-item :label="t('heartbeatOfflineSeconds')" required>
+            <el-input-number
+              v-model="heartbeatOfflineSeconds"
+              :min="5"
+              :max="86400"
+              controls-position="right"
+              class="field"
+            />
+            <div class="field-hint">{{ t('heartbeatOfflineSecondsHint') }}</div>
+          </el-form-item>
+        </div>
+
         <div class="form-footer">
           <div class="footer-meta">
             <span v-if="updatedAt" class="meta">
@@ -373,6 +434,10 @@ onMounted(loadConfig)
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0 20px;
+}
+
+.wide-item {
+  grid-column: span 2;
 }
 
 .field {

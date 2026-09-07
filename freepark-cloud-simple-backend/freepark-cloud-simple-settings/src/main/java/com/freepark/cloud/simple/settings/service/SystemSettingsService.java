@@ -59,11 +59,18 @@ public class SystemSettingsService {
         String defaultColor = SystemSettingsOptions.validatePlateColor(
                 request == null ? null : request.defaultPlateColor());
         SystemSettingsOptions.ensureDefaultAllowed(defaultColor, allowed);
+        List<String> allowedCurrencies = SystemSettingsOptions.normalizeAllowedCurrencies(
+                request == null ? null : request.allowedCurrencies());
+        String defaultCurrency = SystemSettingsOptions.validateCurrency(
+                request == null ? null : request.defaultCurrency());
+        SystemSettingsOptions.ensureDefaultCurrencyAllowed(defaultCurrency, allowedCurrencies);
 
         settings.setDefaultLocale(locale);
         settings.setTimezone(timezone);
         settings.setDefaultPlateColor(defaultColor);
         settings.setAllowedPlateColors(allowed);
+        settings.setDefaultCurrency(defaultCurrency);
+        settings.setAllowedCurrencies(allowedCurrencies);
         // saveAndFlush：让 @PreUpdate 在方法内执行并回写 updatedAt，
         // 使响应中的“最近更新”是本轮真实的 UTC 锚点（而非 flush 前的旧值）
         SystemSettingsView view = toView(settingsRepository.saveAndFlush(settings));
@@ -73,7 +80,7 @@ public class SystemSettingsService {
     }
 
     /**
-     * 返回默认单例配置；历史脏数据（空允许列表/空默认色）在此兜底规范化。
+     * 返回默认单例配置；历史脏数据（空允许列表/空默认值）在此兜底规范化。
      */
     private SystemSettings requireSettings() {
         SystemSettings settings = settingsRepository.findById(SystemSettings.SINGLETON_ID)
@@ -93,6 +100,16 @@ public class SystemSettingsService {
         if (!settings.getAllowedPlateColors().contains(settings.getDefaultPlateColor())) {
             settings.setDefaultPlateColor(settings.getAllowedPlateColors().getFirst());
         }
+        if (settings.getAllowedCurrencies() == null || settings.getAllowedCurrencies().isEmpty()) {
+            settings.setAllowedCurrencies(SystemSettingsOptions.DEFAULT_ALLOWED_CURRENCIES);
+        }
+        if (settings.getDefaultCurrency() == null
+                || settings.getDefaultCurrency().isBlank()) {
+            settings.setDefaultCurrency(SystemSettingsOptions.DEFAULT_CURRENCY);
+        }
+        if (!settings.getAllowedCurrencies().contains(settings.getDefaultCurrency())) {
+            settings.setDefaultCurrency(settings.getAllowedCurrencies().getFirst());
+        }
     }
 
     private SystemSettingsView toView(SystemSettings settings) {
@@ -102,9 +119,12 @@ public class SystemSettingsService {
                 settings.getTimezone(),
                 settings.getDefaultPlateColor(),
                 List.copyOf(settings.getAllowedPlateColors()),
+                settings.getDefaultCurrency(),
+                List.copyOf(settings.getAllowedCurrencies()),
                 SystemSettingsOptions.SUPPORTED_LOCALES,
                 SystemSettingsOptions.SUPPORTED_TIMEZONES,
                 SystemSettingsOptions.SUPPORTED_PLATE_COLORS,
+                SystemSettingsOptions.SUPPORTED_CURRENCIES,
                 settings.getUpdatedAt());
     }
 

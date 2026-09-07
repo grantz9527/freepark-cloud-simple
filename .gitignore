@@ -32,3 +32,7 @@ application-dev.yml
 # One-off local ops scripts (do not commit)
 fp_backup_before_tz.sql
 migrate_tz.sql
+
+# Local runtime/verify leftovers (do not commit)
+.tmp-verify/
+**/freepark-cloud-edge-*/

@@ -21,8 +21,8 @@ import java.util.List;
 /**
  * 全局站点配置（单例，参考 freepark local_server 的 SiteSettings）。
  *
- * <p>目前仅承载“区域与语言”（默认语言/时区）与“车牌颜色”（默认颜色/允许颜色），
- * 其余参考配置项暂未接入。</p>
+ * <p>目前仅承载“区域与语言”（默认语言/时区）、“车牌颜色”（默认颜色/允许颜色）与
+ * “收费金额单位”（默认币种/允许币种），其余参考配置项暂未接入。</p>
  */
 @Entity
 @Table(name = "system_settings")
@@ -56,6 +56,19 @@ public class SystemSettings {
     @OrderColumn(name = "sort_order")
     private List<String> allowedPlateColors = new ArrayList<>();
 
+    /** 默认币种（ISO 4217 货币代码，如 CNY）：站点收费金额的统一展示/录入单位 */
+    @Column(name = "default_currency", nullable = false, length = 16)
+    private String defaultCurrency;
+
+    /** 允许使用的币种集合（有序，自预置货币列表勾选启用） */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "system_settings_allowed_currency",
+            joinColumns = @JoinColumn(name = "settings_id"))
+    @Column(name = "currency", nullable = false, length = 16)
+    @OrderColumn(name = "sort_order")
+    private List<String> allowedCurrencies = new ArrayList<>();
+
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
@@ -63,11 +76,14 @@ public class SystemSettings {
     }
 
     public SystemSettings(String defaultLocale, String timezone, String defaultPlateColor,
-                          List<String> allowedPlateColors) {
+                          List<String> allowedPlateColors, String defaultCurrency,
+                          List<String> allowedCurrencies) {
         this.defaultLocale = defaultLocale;
         this.timezone = timezone;
         this.defaultPlateColor = defaultPlateColor;
         this.allowedPlateColors = new ArrayList<>(allowedPlateColors);
+        this.defaultCurrency = defaultCurrency;
+        this.allowedCurrencies = new ArrayList<>(allowedCurrencies);
     }
 
     @PrePersist
@@ -114,6 +130,22 @@ public class SystemSettings {
 
     public void setAllowedPlateColors(List<String> allowedPlateColors) {
         this.allowedPlateColors = new ArrayList<>(allowedPlateColors);
+    }
+
+    public String getDefaultCurrency() {
+        return defaultCurrency;
+    }
+
+    public void setDefaultCurrency(String defaultCurrency) {
+        this.defaultCurrency = defaultCurrency;
+    }
+
+    public List<String> getAllowedCurrencies() {
+        return allowedCurrencies;
+    }
+
+    public void setAllowedCurrencies(List<String> allowedCurrencies) {
+        this.allowedCurrencies = new ArrayList<>(allowedCurrencies);
     }
 
     public LocalDateTime getUpdatedAt() {

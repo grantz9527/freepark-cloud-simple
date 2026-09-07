@@ -17,9 +17,12 @@ public final class EdgeMqttConfigOptions {
     public static final String DEFAULT_BROKER_HOST = "127.0.0.1";
     public static final int DEFAULT_BROKER_PORT = 1883;
     public static final String DEFAULT_CLIENT_ID = "freepark-cloud-edge";
-    public static final int DEFAULT_QOS = 0;
+    /** 默认 QoS：至少一次，保证配置快照不丢失；整包幂等可容忍重复 */
+    public static final int DEFAULT_QOS = 1;
     public static final int DEFAULT_CONFIG_SYNC_INTERVAL_SECONDS = 60;
     public static final int DEFAULT_KEEP_ALIVE_SECONDS = 60;
+    /** 默认心跳离线判定阈值（秒）：超过该时长未收到某车场心跳即判定离线 */
+    public static final int DEFAULT_HEARTBEAT_OFFLINE_SECONDS = 90;
 
     /** 端口合法范围（含端点） */
     public static final int MIN_PORT = 1;
@@ -32,6 +35,10 @@ public final class EdgeMqttConfigOptions {
     /** 连接保活间隔（秒），0 表示禁用保活 */
     public static final int MIN_KEEP_ALIVE_SECONDS = 0;
     public static final int MAX_KEEP_ALIVE_SECONDS = 65535;
+
+    /** 心跳离线判定阈值（秒）合理范围 */
+    public static final int MIN_HEARTBEAT_OFFLINE_SECONDS = 5;
+    public static final int MAX_HEARTBEAT_OFFLINE_SECONDS = 86400;
 
     public static final List<Integer> SUPPORTED_QOS = List.of(0, 1, 2);
 
@@ -84,6 +91,14 @@ public final class EdgeMqttConfigOptions {
     public static int validateKeepAliveSeconds(int seconds) {
         if (seconds < MIN_KEEP_ALIVE_SECONDS || seconds > MAX_KEEP_ALIVE_SECONDS) {
             throw new BizException(400, MessageKeys.EDGE_CONFIG_KEEP_ALIVE_INVALID);
+        }
+        return seconds;
+    }
+
+    public static int validateHeartbeatOfflineSeconds(int seconds) {
+        if (seconds < MIN_HEARTBEAT_OFFLINE_SECONDS
+                || seconds > MAX_HEARTBEAT_OFFLINE_SECONDS) {
+            throw new BizException(400, MessageKeys.EDGE_CONFIG_HEARTBEAT_OFFLINE_INVALID);
         }
         return seconds;
     }

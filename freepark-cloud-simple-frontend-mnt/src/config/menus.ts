@@ -105,6 +105,11 @@ export const classicMenus: MenuItem[] = [
         id: 'billing-date-management',
         titleKey: 'menu.dateManagement',
         path: '/billing/date-management'
+      },
+      {
+        id: 'billing-cycle-profiles',
+        titleKey: 'menu.billingCycleProfiles',
+        path: '/billing/cycle-profiles'
       }
     ]
   },
@@ -127,6 +132,11 @@ export const classicMenus: MenuItem[] = [
         id: 'edge-computing',
         titleKey: 'menu.edgeComputing',
         path: '/system/edge-computing'
+      },
+      {
+        id: 'edge-heartbeat',
+        titleKey: 'menu.edgeHeartbeat',
+        path: '/system/edge-heartbeat'
       }
     ]
   }

@@ -3,8 +3,8 @@ package com.freepark.cloud.simple.settings.runtime;
 /**
  * 边缘配置快照构建器：针对某个车场构建同步负载中的 data 片段（JSON 字符串）。
  *
- * <p>接口定义在 settings（不感知具体业务实体）；由外层 startup 提供面向
- * 实际业务数据（如车场自身的开关配置、通行判定顺序）的实现。</p>
+ * <p>接口定义在 settings（不感知具体业务实体）；由提供车场数据的业务模块
+ * （如 parking）提供面向实际业务数据（如车场自身的开关配置、通行判定顺序）的实现。</p>
  */
 public interface EdgeConfigSnapshotBuilder {
 

@@ -1,4 +1,4 @@
-package com.freepark.cloud.simple.edge;
+package com.freepark.cloud.simple.parking.edge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -11,7 +11,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * 车场自身配置（V1 数据片段）：车场基础信息、通行拦截开关与生效的通行判定顺序。
- * 供云端周期下发给对应边缘服务，边缘侧据此同步本地车场配置。
+ * 车场业务模块提供给 settings 边缘配置下发的 SPI 实现，供云端周期下发给对应
+ * 边缘服务，边缘侧据此同步本地车场配置。
  */
 @Component
 public class LotConfigSnapshotBuilder implements EdgeConfigSnapshotBuilder {
