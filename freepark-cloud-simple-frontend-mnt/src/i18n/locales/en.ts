@@ -63,7 +63,8 @@ export default {
     dateManagement: 'Date Management',
     system: 'System',
     systemAdmins: 'Administrators',
-    systemSettings: 'System Settings'
+    systemSettings: 'System Settings',
+    edgeComputing: 'Edge Computing'
   },
   userMgmt: {
     searchPlaceholder: 'Search username / nickname',

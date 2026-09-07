@@ -7,11 +7,17 @@ public class BizException extends RuntimeException {
 
     private final int code;
     private final String messageKey;
+    private final Object[] args;
 
     public BizException(int code, String messageKey) {
+        this(code, messageKey, null);
+    }
+
+    public BizException(int code, String messageKey, Object... args) {
         super(messageKey);
         this.code = code;
         this.messageKey = messageKey;
+        this.args = args;
     }
 
     public int getCode() {
@@ -20,5 +26,9 @@ public class BizException extends RuntimeException {
 
     public String getMessageKey() {
         return messageKey;
+    }
+
+    public Object[] getArgs() {
+        return args;
     }
 }

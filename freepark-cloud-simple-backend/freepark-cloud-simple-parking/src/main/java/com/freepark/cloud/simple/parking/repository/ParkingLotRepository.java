@@ -4,6 +4,7 @@ import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ParkingLotRepository extends JpaRepository<ParkingLot, Long> {
 
@@ -12,4 +13,6 @@ public interface ParkingLotRepository extends JpaRepository<ParkingLot, Long> {
     boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
 
     List<ParkingLot> findAllByOrderByCreatedAtDesc();
+
+    Optional<ParkingLot> findByCode(String code);
 }

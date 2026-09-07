@@ -122,6 +122,11 @@ export const classicMenus: MenuItem[] = [
         id: 'system-settings',
         titleKey: 'menu.systemSettings',
         path: '/system/settings'
+      },
+      {
+        id: 'edge-computing',
+        titleKey: 'menu.edgeComputing',
+        path: '/system/edge-computing'
       }
     ]
   }

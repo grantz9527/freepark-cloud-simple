@@ -52,6 +52,19 @@ public final class MessageKeys {
     public static final String SETTINGS_EMPTY_PLATE_COLORS = "settings.emptyPlateColors";
     public static final String SETTINGS_DEFAULT_COLOR_NOT_ALLOWED = "settings.defaultColorNotAllowed";
 
+    public static final String EDGE_CONFIG_HOST_REQUIRED = "edge.config.hostRequired";
+    public static final String EDGE_CONFIG_HOST_INVALID = "edge.config.hostInvalid";
+    public static final String EDGE_CONFIG_PORT_INVALID = "edge.config.portInvalid";
+    public static final String EDGE_CONFIG_CLIENT_ID_REQUIRED = "edge.config.clientIdRequired";
+    public static final String EDGE_CONFIG_CLIENT_ID_INVALID = "edge.config.clientIdInvalid";
+    public static final String EDGE_CONFIG_QOS_INVALID = "edge.config.qosInvalid";
+    public static final String EDGE_CONFIG_SYNC_INTERVAL_INVALID = "edge.config.syncIntervalInvalid";
+    public static final String EDGE_CONFIG_KEEP_ALIVE_INVALID = "edge.config.keepAliveInvalid";
+    public static final String EDGE_CONFIG_TOPIC_TOO_LONG = "edge.config.topicTooLong";
+    public static final String EDGE_CONFIG_TOPIC_PREFIX_INVALID = "edge.config.topicPrefixInvalid";
+    public static final String EDGE_CONFIG_CREDENTIAL_TOO_LONG = "edge.config.credentialTooLong";
+    public static final String EDGE_CONFIG_TEST_FAILED = "edge.config.testFailed";
+
     private MessageKeys() {
     }
 }

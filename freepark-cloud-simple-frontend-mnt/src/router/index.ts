@@ -126,6 +126,12 @@ const router = createRouter({
           name: 'system-settings',
           component: () => import('../views/SystemSettingsView.vue'),
           meta: { titleKey: 'menu.systemSettings' }
+        },
+        {
+          path: 'system/edge-computing',
+          name: 'edge-computing',
+          component: () => import('../views/EdgeComputingView.vue'),
+          meta: { titleKey: 'menu.edgeComputing' }
         }
       ]
     },

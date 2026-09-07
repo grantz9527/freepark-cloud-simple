@@ -26,6 +26,7 @@ const d: BiDict = {
     'zh-CN': '默认顺序（未自定义时）：黑名单 → 白名单 → 正则名单。',
     en: 'Default order (when not customized): Blacklist → Whitelist → Pattern Allowlist.'
   },
+  dragHandle: { 'zh-CN': '拖拽调整顺序', en: 'Drag to reorder' },
   moveUp: { 'zh-CN': '上移', en: 'Up' },
   moveDown: { 'zh-CN': '下移', en: 'Down' },
   saveOrder: { 'zh-CN': '保存判定顺序', en: 'Save Order' },
@@ -180,6 +181,68 @@ async function loadConfigs() {
 
 /* ---------------- 判序调整与保存 ---------------- */
 
+const dragFrom = ref<number | null>(null)
+const dragOver = ref<number | null>(null)
+
+function onDragStart(index: number, event: DragEvent) {
+  dragFrom.value = index
+  dragOver.value = index
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(index))
+  }
+}
+
+function onDragOver(index: number, event: DragEvent) {
+  event.preventDefault()
+  if (dragFrom.value === null) {
+    return
+  }
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+  if (dragOver.value !== index) {
+    dragOver.value = index
+  }
+}
+
+function onDragLeave(index: number, event: DragEvent) {
+  if (!event.currentTarget) {
+    return
+  }
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const inside =
+    event.clientX >= rect.left &&
+    event.clientX <= rect.right &&
+    event.clientY >= rect.top &&
+    event.clientY <= rect.bottom
+  if (!inside && dragOver.value === index) {
+    dragOver.value = null
+  }
+}
+
+function onDrop(index: number, event: DragEvent) {
+  event.preventDefault()
+  const from = dragFrom.value
+  dragFrom.value = null
+  dragOver.value = null
+  if (from === null || from === index) {
+    return
+  }
+  const next = [...ruleOrder.value]
+  const [moved] = next.splice(from, 1)
+  if (moved) {
+    next.splice(index, 0, moved)
+    ruleOrder.value = next
+    orderDirty.value = true
+  }
+}
+
+function onDragEnd() {
+  dragFrom.value = null
+  dragOver.value = null
+}
+
 function moveRule(index: number, direction: -1 | 1) {
   const target = index + direction
   if (target < 0 || target >= ruleOrder.value.length) {
@@ -301,7 +364,34 @@ onMounted(async () => {
         </div>
 
         <div class="order-list">
-          <div v-for="(rule, index) in ruleOrder" :key="rule" class="order-row">
+          <div
+            v-for="(rule, index) in ruleOrder"
+            :key="rule"
+            class="order-row"
+            :class="{
+              'row-dragging': dragFrom === index,
+              'row-drop-target': dragFrom !== null && dragFrom !== index && dragOver === index
+            }"
+            @dragover="onDragOver(index, $event)"
+            @dragleave="onDragLeave(index, $event)"
+            @drop="onDrop(index, $event)"
+          >
+            <span
+              class="order-handle"
+              :title="t('dragHandle')"
+              draggable="true"
+              @dragstart="onDragStart(index, $event)"
+              @dragend="onDragEnd"
+            >
+              <svg viewBox="0 0 12 20" width="10" height="16" aria-hidden="true">
+                <circle cx="3" cy="3" r="1.5" />
+                <circle cx="9" cy="3" r="1.5" />
+                <circle cx="3" cy="10" r="1.5" />
+                <circle cx="9" cy="10" r="1.5" />
+                <circle cx="3" cy="17" r="1.5" />
+                <circle cx="9" cy="17" r="1.5" />
+              </svg>
+            </span>
             <span class="order-index">{{ index + 1 }}</span>
             <div class="order-info">
               <div class="order-name">
@@ -468,6 +558,43 @@ onMounted(async () => {
   border: 1px solid var(--fp-line);
   border-radius: var(--fp-radius);
   background: var(--fp-surface-subtle, rgba(0, 0, 0, 0.02));
+  transition: border-color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.order-row.row-dragging {
+  opacity: 0.45;
+}
+
+.order-row.row-drop-target {
+  border-color: var(--fp-teal, #0f766e);
+  background: var(--fp-teal-soft, #ccfbf1);
+}
+
+.order-handle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  cursor: grab;
+  color: var(--fp-muted);
+  opacity: 0.7;
+  padding: 2px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.order-handle:hover {
+  opacity: 1;
+  color: var(--fp-teal, #0f766e);
+}
+
+.order-handle:active {
+  cursor: grabbing;
+}
+
+.order-handle svg {
+  display: block;
+  fill: currentColor;
 }
 
 .order-index {

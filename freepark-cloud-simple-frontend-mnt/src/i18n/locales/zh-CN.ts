@@ -61,7 +61,8 @@ export default {
     dateManagement: '日期管理',
     system: '系统管理',
     systemAdmins: '管理员管理',
-    systemSettings: '系统配置'
+    systemSettings: '系统配置',
+    edgeComputing: '边缘计算配置'
   },
   userMgmt: {
     searchPlaceholder: '搜索用户名 / 昵称',

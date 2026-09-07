@@ -25,7 +25,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BizException.class)
     public ApiResult<Void> handleBiz(BizException e) {
-        return ApiResult.fail(e.getCode(), messageService.get(e.getMessageKey()));
+        Object[] args = e.getArgs();
+        String message = args == null ? messageService.get(e.getMessageKey())
+                : messageService.get(e.getMessageKey(), args);
+        return ApiResult.fail(e.getCode(), message);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
