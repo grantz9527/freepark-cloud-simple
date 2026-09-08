@@ -27,6 +27,9 @@ public interface WhitelistVehicleRepository
     boolean existsActiveAt(@Param("lotId") Long lotId, @Param("plateNumber") String plateNumber,
                           @Param("now") LocalDateTime now);
 
+    /** 车场下全部白名单记录（按创建顺序），用于云端全量快照下发 */
+    List<WhitelistVehicle> findAllByLotIdOrderByIdAsc(Long lotId);
+
     /** 车牌在车场内的全部记录（含已过期/未生效，用于编辑校验与列表展示） */
     List<WhitelistVehicle> findAllByLotIdAndPlateNumberIgnoreCase(Long lotId, String plate);
 }

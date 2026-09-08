@@ -6,6 +6,7 @@ import com.freepark.cloud.simple.parking.dto.CreateParkingSessionRequest;
 import com.freepark.cloud.simple.parking.dto.ParkingSessionView;
 import com.freepark.cloud.simple.parking.dto.PayStatusRequest;
 import com.freepark.cloud.simple.parking.dto.UpdateParkingSessionRequest;
+import com.freepark.cloud.simple.parking.dto.VehicleArrearsResult;
 import com.freepark.cloud.simple.parking.entity.ParkingSessionStatus;
 import com.freepark.cloud.simple.parking.service.ParkingSessionService;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -50,6 +51,29 @@ public class ParkingSessionController {
     public ApiResult<Boolean> hasOpen(@RequestParam Long lotId,
                                       @RequestParam String plateNumber) {
         return ApiResult.ok(parkingSessionService.hasOpenSession(lotId, plateNumber));
+    }
+
+    /**
+     * 车费查询：查单车（车牌，可选车场）的欠费停车流水，含欠费总额。
+     */
+    @GetMapping("/vehicle-query")
+    public ApiResult<VehicleArrearsResult> queryVehicleArrears(
+            @RequestParam(required = false) Long lotId,
+            @RequestParam(required = false) String plateNumber,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ApiResult.ok(parkingSessionService.queryVehicleArrears(lotId, plateNumber, page, size));
+    }
+
+    /**
+     * 车费查询辅助：刷新该车牌最近一笔停车流水费用（在场按当前时刻估算，已出场按真实出场重算），
+     * 供车费查询页在查询前自动调用，保证展示按当前计费配置的最新应收。
+     */
+    @PostMapping("/vehicle-query/recalc-latest")
+    public ApiResult<ParkingSessionView> recalcLatest(
+            @RequestParam(required = false) Long lotId,
+            @RequestParam(required = false) String plateNumber) {
+        return ApiResult.ok(parkingSessionService.recalcLatestSession(lotId, plateNumber));
     }
 
     /** 手动新增在场流水（入场）。 */

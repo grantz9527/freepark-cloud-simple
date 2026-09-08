@@ -19,5 +19,9 @@ public interface ParkingSessionRepository
     Optional<ParkingSession> findFirstByLotIdAndPlateNumberIgnoreCaseAndStatusOrderByEntryTimeDesc(
             Long lotId, String plate, ParkingSessionStatus status);
 
+    /** 边缘上报幂等查找：按（边缘节点编号 + 边缘流水 ID）定位已入库记录 */
+    Optional<ParkingSession> findByEdgeNodeCodeAndEdgeSessionId(
+            String edgeNodeCode, String edgeSessionId);
+
     List<ParkingSession> findAllByOrderByEntryTimeDesc();
 }

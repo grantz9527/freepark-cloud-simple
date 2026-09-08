@@ -223,7 +223,15 @@ const pagedRows = computed(() => {
 })
 
 function formatTime(value?: string): string {
-  return value || '-'
+  if (!value) {
+    return '-'
+  }
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})/.exec(value)
+  if (!match) {
+    return value
+  }
+  const pad = (n: string): string => n.padStart(2, '0')
+  return `${match[1]}-${pad(match[2])}-${pad(match[3])} ${pad(match[4])}:${match[5]}`
 }
 
 function lotTypeLabel(type: LotTypeOption): string {

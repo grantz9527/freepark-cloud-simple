@@ -9,12 +9,14 @@ import com.freepark.cloud.simple.parking.dto.BlacklistVehicleView;
 import com.freepark.cloud.simple.parking.dto.CreateBlacklistVehicleRequest;
 import com.freepark.cloud.simple.parking.dto.UpdateBlacklistVehicleRequest;
 import com.freepark.cloud.simple.parking.dto.VehicleImportResult;
+import com.freepark.cloud.simple.parking.edge.EdgeDomainChangeNotifier;
 import com.freepark.cloud.simple.parking.entity.BlacklistVehicle;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.entity.PlateColor;
 import com.freepark.cloud.simple.parking.repository.BlacklistVehicleRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
 import com.freepark.cloud.simple.parking.support.ParkingSpreadsheetSupport;
+import com.freepark.cloud.simple.settings.runtime.EdgeConfigSyncProtocol;
 import com.freepark.cloud.simple.user.service.AdminGuard;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -47,15 +49,18 @@ public class BlacklistVehicleService {
     private final BlacklistVehicleRepository vehicles;
     private final AdminGuard adminGuard;
     private final SiteZoneProvider siteZoneProvider;
+    private final EdgeDomainChangeNotifier notifier;
 
     public BlacklistVehicleService(ParkingLotRepository lots,
                                    BlacklistVehicleRepository vehicles,
                                    AdminGuard adminGuard,
-                                   SiteZoneProvider siteZoneProvider) {
+                                   SiteZoneProvider siteZoneProvider,
+                                   EdgeDomainChangeNotifier notifier) {
         this.lots = lots;
         this.vehicles = vehicles;
         this.adminGuard = adminGuard;
         this.siteZoneProvider = siteZoneProvider;
+        this.notifier = notifier;
     }
 
     @Transactional(readOnly = true)
@@ -95,13 +100,15 @@ public class BlacklistVehicleService {
         vehicle.setStartTime(startTime);
         vehicle.setEndTime(request.endTime());
         vehicle.setEnabled(enabled);
-        return BlacklistVehicleView.from(vehicles.save(vehicle));
+        BlacklistVehicle saved = vehicles.save(vehicle);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_BLACKLIST, lot.getCode(), saved);
+        return BlacklistVehicleView.from(saved);
     }
 
     @Transactional
     public BlacklistVehicleView updateVehicle(Long lotId, Long vehicleId, UpdateBlacklistVehicleRequest request) {
         adminGuard.requireEnabledAdmin();
-        requireLot(lotId);
+        ParkingLot lot = requireLot(lotId);
         BlacklistVehicle vehicle = requireVehicle(vehicleId);
         if (!vehicle.getLot().getId().equals(lotId)) {
             throw new BizException(404, MessageKeys.COMMON_NOT_FOUND);
@@ -123,18 +130,21 @@ public class BlacklistVehicleService {
         vehicle.setStartTime(startTime);
         vehicle.setEndTime(request.endTime());
         vehicle.setEnabled(enabled);
-        return BlacklistVehicleView.from(vehicles.save(vehicle));
+        BlacklistVehicle saved = vehicles.save(vehicle);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_BLACKLIST, lot.getCode(), saved);
+        return BlacklistVehicleView.from(saved);
     }
 
     @Transactional
     public void deleteVehicle(Long lotId, Long vehicleId) {
         adminGuard.requireEnabledAdmin();
-        requireLot(lotId);
+        ParkingLot lot = requireLot(lotId);
         BlacklistVehicle vehicle = requireVehicle(vehicleId);
         if (!vehicle.getLot().getId().equals(lotId)) {
             throw new BizException(404, MessageKeys.COMMON_NOT_FOUND);
         }
         vehicles.delete(vehicle);
+        notifier.delete(EdgeConfigSyncProtocol.DOMAIN_BLACKLIST, lot.getCode(), vehicle.getId());
     }
 
     @Transactional
@@ -145,6 +155,7 @@ public class BlacklistVehicleService {
                 file, ParkingSpreadsheetSupport.ACCESS_LIST_COLUMN_COUNT);
         int imported = 0;
         int skipped = 0;
+        List<BlacklistVehicle> created = new ArrayList<>();
         for (String[] cells : rows) {
             String plate = ParkingSpreadsheetSupport.cell(cells, 0);
             String owner = ParkingSpreadsheetSupport.cell(cells, 1);
@@ -183,8 +194,11 @@ public class BlacklistVehicleService {
             vehicle.setStartTime(startTime);
             vehicle.setEndTime(endTime);
             vehicle.setEnabled(true);
-            vehicles.save(vehicle);
+            created.add(vehicles.save(vehicle));
             imported++;
+        }
+        if (!created.isEmpty()) {
+            notifier.upserts(EdgeConfigSyncProtocol.DOMAIN_BLACKLIST, lot.getCode(), created);
         }
         return new VehicleImportResult(null, imported, skipped);
     }

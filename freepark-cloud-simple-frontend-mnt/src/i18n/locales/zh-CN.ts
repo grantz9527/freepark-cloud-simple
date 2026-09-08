@@ -55,6 +55,8 @@ export default {
     accessJudgment: '通行判定',
     sectionParking: '停车管理',
     parkingSessions: '停车流水',
+    discountVehicles: '优惠车辆',
+    vehicleFeeQuery: '车费查询',
     billingRules: '计费规则',
     generalBillingRules: '24小时制计费规则',
     dailyBillingRules: '每日制计费规则',
@@ -64,6 +66,7 @@ export default {
     systemAdmins: '管理员管理',
     systemSettings: '系统配置',
     edgeComputing: '边缘计算配置',
+    edgeNodes: '边缘节点管理',
     edgeHeartbeat: '边缘监控'
   },
   userMgmt: {

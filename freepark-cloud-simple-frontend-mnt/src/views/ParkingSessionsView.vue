@@ -287,6 +287,16 @@ function durationText(minutes: number | null): string {
   return parts.join('')
 }
 
+/** 时间展示：与白名单生效时间口径一致，去掉 ISO 的 T 并统一精确到秒（yyyy-MM-dd HH:mm:ss）。 */
+function fmtDateTime(value: string | null | undefined): string {
+  if (!value) {
+    return '—'
+  }
+  const text = value.includes('T') ? value.replace('T', ' ') : value
+  const clean = text.split('.')[0]
+  return clean.length === 16 ? `${clean}:00` : clean
+}
+
 /** 应收金额展示：未计费（null）显示 —，已结算显示“金额 + 单位” */
 function feeText(value: number | null): string {
   if (value == null) {
@@ -772,11 +782,15 @@ onMounted(async () => {
           </template>
         </el-table-column>
         <el-table-column prop="lotName" :label="t('lot')" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="entryTime" :label="t('entryTime')" min-width="165" />
-        <el-table-column prop="entryLaneName" :label="t('entryLane')" min-width="130" show-overflow-tooltip />
-        <el-table-column prop="exitTime" :label="t('exitTime')" min-width="165">
+        <el-table-column :label="t('entryTime')" min-width="170">
           <template #default="{ row }">
-            {{ row.exitTime ?? '—' }}
+            {{ fmtDateTime(row.entryTime) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="entryLaneName" :label="t('entryLane')" min-width="130" show-overflow-tooltip />
+        <el-table-column :label="t('exitTime')" min-width="170">
+          <template #default="{ row }">
+            {{ fmtDateTime(row.exitTime) }}
           </template>
         </el-table-column>
         <el-table-column prop="exitLaneName" :label="t('exitLane')" min-width="130" show-overflow-tooltip>

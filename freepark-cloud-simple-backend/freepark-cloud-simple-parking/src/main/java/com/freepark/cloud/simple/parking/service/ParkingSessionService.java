@@ -9,11 +9,14 @@ import com.freepark.cloud.simple.common.web.PageResult;
 import com.freepark.cloud.simple.parking.dto.CreateParkingSessionRequest;
 import com.freepark.cloud.simple.parking.dto.ParkingSessionView;
 import com.freepark.cloud.simple.parking.dto.UpdateParkingSessionRequest;
+import com.freepark.cloud.simple.parking.dto.VehicleArrearsResult;
+import com.freepark.cloud.simple.parking.entity.DiscountVehicle;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.entity.ParkingPayStatus;
 import com.freepark.cloud.simple.parking.entity.ParkingSession;
 import com.freepark.cloud.simple.parking.entity.ParkingSessionStatus;
 import com.freepark.cloud.simple.parking.entity.PlateColor;
+import com.freepark.cloud.simple.parking.repository.DiscountVehicleRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingSessionRepository;
 import com.freepark.cloud.simple.user.service.AdminGuard;
@@ -50,17 +53,20 @@ public class ParkingSessionService {
 
     private final ParkingSessionRepository sessions;
     private final ParkingLotRepository lots;
+    private final DiscountVehicleRepository discountVehicles;
     private final AdminGuard adminGuard;
     private final BillingSessionChargeService chargeService;
     private final SiteZoneProvider siteZoneProvider;
 
     public ParkingSessionService(ParkingSessionRepository sessions,
                                  ParkingLotRepository lots,
+                                 DiscountVehicleRepository discountVehicles,
                                  AdminGuard adminGuard,
                                  BillingSessionChargeService chargeService,
                                  SiteZoneProvider siteZoneProvider) {
         this.sessions = sessions;
         this.lots = lots;
+        this.discountVehicles = discountVehicles;
         this.adminGuard = adminGuard;
         this.chargeService = chargeService;
         this.siteZoneProvider = siteZoneProvider;
@@ -80,6 +86,103 @@ public class ParkingSessionService {
         List<ParkingSessionView> items = result.getContent().stream()
                 .map(ParkingSessionView::from).toList();
         return PageResult.of(items, result.getTotalElements(), safePage, safeSize);
+    }
+
+    /**
+     * 车费查询（单车欠费流水）：返回车牌（+可选车场）的全部「欠费」停车流水，
+     * 含在场（OPEN，已产生估算费用）与已出场（CLOSED，已结算）的流水。
+     * 欠费口径与流水展示一致：应收金额大于 0、支付状态未付清
+     * （未登记/未支付/部分支付均视为欠费；在场按未支付计）；免缴费（0 元）与已支付不计入。
+     * {@code totalAmount} 为该车全量欠费流水合计应收（不受分页影响）。
+     */
+    @Transactional(readOnly = true)
+    public VehicleArrearsResult queryVehicleArrears(Long lotId, String plateNumber,
+                                                    int page, int size) {
+        int safePage = Math.max(page, 1);
+        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        if (!StringUtils.hasText(plateNumber)) {
+            return new VehicleArrearsResult(List.of(), 0, safePage, safeSize, BigDecimal.ZERO);
+        }
+        String plate = plateNumber.trim().toUpperCase();
+        Specification<ParkingSession> spec = buildVehicleArrearsSpec(lotId, plate);
+        Page<ParkingSession> result = sessions.findAll(spec,
+                PageRequest.of(safePage - 1, safeSize,
+                        Sort.by(Sort.Direction.DESC, "entryTime")));
+        List<ParkingSessionView> items = result.getContent().stream()
+                .map(ParkingSessionView::from).toList();
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (ParkingSession session : sessions.findAll(spec)) {
+            if (session.getFeeYuan() != null) {
+                totalAmount = totalAmount.add(session.getFeeYuan());
+            }
+        }
+        return new VehicleArrearsResult(items, result.getTotalElements(),
+                safePage, safeSize, totalAmount);
+    }
+
+    /**
+     * 车费查询辅助：刷新车牌（+可选车场）最近一笔停车流水的费用。
+     * 在场（OPEN）按「入场 ~ 当前时刻」估算；已出场（CLOSED）按真实出场时间重算；
+     * 均快照应收金额，保证查询时展示的是按当前计费配置（含优惠车辆免费时长）的最新结果。
+     * 无可用流水时返回 {@code null}。
+     */
+    @Transactional
+    public ParkingSessionView recalcLatestSession(Long lotId, String plateNumber) {
+        adminGuard.requireEnabledAdmin();
+        if (!StringUtils.hasText(plateNumber)) {
+            return null;
+        }
+        String plate = plateNumber.trim().toUpperCase();
+        List<ParkingSession> first = sessions.findAll(
+                buildVehicleLatestSpec(lotId, plate),
+                PageRequest.of(0, 1,
+                        Sort.by(Sort.Direction.DESC, "entryTime"))).getContent();
+        if (first.isEmpty()) {
+            return null;
+        }
+        ParkingSession session = first.get(0);
+        if (session.getEntryTime() == null
+                || (session.getStatus() == ParkingSessionStatus.CLOSED
+                && (session.getExitTime() == null
+                || !session.getExitTime().isAfter(session.getEntryTime())))) {
+            return null;
+        }
+        session.setFeeYuan(computeFee(session));
+        return ParkingSessionView.from(sessions.save(session));
+    }
+
+    /** 车费查询条件：可选车场 + 车牌精确匹配（忽略大小写）+ 在场或已出场。 */
+    private Specification<ParkingSession> buildVehicleLatestSpec(Long lotId, String plate) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (lotId != null) {
+                predicates.add(cb.equal(root.get("lotId"), lotId));
+            }
+            predicates.add(cb.equal(cb.lower(root.get("plateNumber")), plate.toLowerCase()));
+            predicates.add(root.get("status").in(List.of(
+                    ParkingSessionStatus.OPEN, ParkingSessionStatus.CLOSED)));
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    /** 车费查询条件：可选车场 + 车牌精确匹配（忽略大小写）+ 在场或已出场 + 应收 &gt; 0 且未付清。 */
+    private Specification<ParkingSession> buildVehicleArrearsSpec(Long lotId, String plate) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (lotId != null) {
+                predicates.add(cb.equal(root.get("lotId"), lotId));
+            }
+            predicates.add(cb.equal(cb.lower(root.get("plateNumber")), plate.toLowerCase()));
+            predicates.add(root.get("status").in(List.of(
+                    ParkingSessionStatus.OPEN, ParkingSessionStatus.CLOSED)));
+            Path<BigDecimal> fee = root.get("feeYuan");
+            predicates.add(cb.isNotNull(fee));
+            predicates.add(cb.greaterThan(fee, BigDecimal.ZERO));
+            Path<ParkingPayStatus> pay = root.get("payStatus");
+            // 未登记支付（null）展示为未支付；在场无支付状态同样视为欠费
+            predicates.add(cb.or(cb.isNull(pay), cb.notEqual(pay, ParkingPayStatus.PAID)));
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
     }
 
     @Transactional(readOnly = true)
@@ -251,6 +354,7 @@ public class ParkingSessionService {
 
     /**
      * 结算应收金额：已出场用真实出场时间；在场用当前时刻作为临时终点（估算）。
+     * 命中「优惠车辆」时每次入场免费 freeMinutes 分钟（自入场时刻顺延起算），其余照常计费。
      * 未命中绑定/区间不可结算/入场晚于终点时返回 null（未计费）。
      */
     private BigDecimal computeFee(ParkingSession session) {
@@ -261,11 +365,21 @@ public class ParkingSessionService {
                 || !exit.isAfter(session.getEntryTime())) {
             return null;
         }
+        Integer freeMinutes = null;
+        if (session.getLotId() != null && StringUtils.hasText(session.getPlateNumber())) {
+            DiscountVehicle discount = discountVehicles
+                    .findByLotIdAndPlateNumberIgnoreCaseAndEnabledTrue(
+                            session.getLotId(), session.getPlateNumber())
+                    .orElse(null);
+            if (discount != null) {
+                freeMinutes = discount.getFreeMinutes();
+            }
+        }
         String color = session.getPlateColor() == null
                 ? null
                 : session.getPlateColor().name();
         return chargeService.chargeFor(session.getLotId(), color,
-                session.getEntryTime(), exit);
+                session.getEntryTime(), exit, freeMinutes);
     }
 
     /**

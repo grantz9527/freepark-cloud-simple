@@ -57,6 +57,8 @@ export default {
     accessJudgment: 'Access Judgment',
     sectionParking: 'Parking Management',
     parkingSessions: 'Parking Sessions',
+    discountVehicles: 'Discount Vehicles',
+    vehicleFeeQuery: 'Fee Query',
     billingRules: 'Billing Rules',
     generalBillingRules: '24-Hour Billing Rules',
     dailyBillingRules: 'Daily Billing Rules',
@@ -66,6 +68,7 @@ export default {
     systemAdmins: 'Administrators',
     systemSettings: 'System Settings',
     edgeComputing: 'Edge Computing',
+    edgeNodes: 'Edge Nodes',
     edgeHeartbeat: 'Edge Monitoring'
   },
   userMgmt: {

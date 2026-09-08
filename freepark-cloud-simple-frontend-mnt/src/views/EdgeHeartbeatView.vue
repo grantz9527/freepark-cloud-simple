@@ -11,34 +11,39 @@ const REFRESH_MS = 5000
 const d: BiDict = {
   pageHint: {
     'zh-CN':
-      '展示各车场上行心跳的实时在线状态；云端按“最近一次心跳到达时间”与配置的离线阈值动态判定，无需手动触发。',
-    en: 'Live online status of heartbeats reported by lots. The cloud evaluates each lot against the configured offline threshold from its last heartbeat.'
+      '展示各边缘节点上行心跳的实时在线状态；云端按“最近一次心跳到达时间”与配置的离线阈值动态判定，无需手动触发。',
+    en: 'Live online status of heartbeats reported by edge nodes. The cloud evaluates each node against the configured offline threshold from its last heartbeat.'
   },
-  statOnline: { 'zh-CN': '在线车场', en: 'Online lots' },
-  statOffline: { 'zh-CN': '离线车场', en: 'Offline lots' },
-  statUnknown: { 'zh-CN': '未知车场', en: 'Unknown lots' },
-  statTotal: { 'zh-CN': '目标车场', en: 'Target lots' },
-  colParkCode: { 'zh-CN': '车场编码', en: 'Lot code' },
-  colParkName: { 'zh-CN': '车场名称', en: 'Lot name' },
+  statOnline: { 'zh-CN': '在线节点', en: 'Online nodes' },
+  statOffline: { 'zh-CN': '离线节点', en: 'Offline nodes' },
+  statUnknown: { 'zh-CN': '未知节点', en: 'Unknown nodes' },
+  statTotal: { 'zh-CN': '目标节点', en: 'Target nodes' },
+  colNodeCode: { 'zh-CN': '节点编号', en: 'Node code' },
+  colNodeName: { 'zh-CN': '节点名称', en: 'Node name' },
   colStatus: { 'zh-CN': '状态', en: 'Status' },
   colLastSeen: { 'zh-CN': '最近心跳', en: 'Last heartbeat' },
+  colLots: { 'zh-CN': '管辖车场', en: 'Managed lots' },
+  expandHint: { 'zh-CN': '展开查看该节点管辖的车场清单', en: 'Expand to see lots under this node' },
+  lotCode: { 'zh-CN': '车场编码', en: 'Lot code' },
+  lotName: { 'zh-CN': '车场名称', en: 'Lot name' },
+  noLots: { 'zh-CN': '该节点暂未绑定车场', en: 'No lots bound to this node yet' },
   online: { 'zh-CN': '在线', en: 'Online' },
   offline: { 'zh-CN': '离线', en: 'Offline' },
   unknown: { 'zh-CN': '未知', en: 'Unknown' },
   neverSeen: { 'zh-CN': '从未收到', en: 'Never received' },
   monitorOn: {
-    'zh-CN': '云端已订阅“{topic}”，超过 {seconds} 秒未收到某车场心跳即判定离线。',
-    en: 'Subscribed to "{topic}". A lot is offline after {seconds}s without a heartbeat.'
+    'zh-CN': '云端已订阅“{topic}”，超过 {seconds} 秒未收到某节点心跳即判定离线。',
+    en: 'Subscribed to "{topic}". A node is offline after {seconds}s without a heartbeat.'
   },
   monitorOffTitle: { 'zh-CN': '未启用心跳监控', en: 'Heartbeat monitoring is off' },
   monitorOffDesc: {
-    'zh-CN': '前往「边缘计算配置」填写“心跳订阅主题”并开启边缘计算接入后，本页才会展示车场在线状态。',
-    en: 'Go to Edge Computing, fill in the heartbeat subscribe topic, and enable edge computing to monitor lot status here.'
+    'zh-CN': '前往「边缘计算配置」填写“心跳订阅主题”并开启边缘计算接入后，本页才会展示节点在线状态。',
+    en: 'Go to Edge Computing, fill in the heartbeat subscribe topic, and enable edge computing to monitor node status here.'
   },
   goConfig: { 'zh-CN': '前往配置', en: 'Go to config' },
   connDownTitle: { 'zh-CN': '云端连接已断开', en: 'Cloud connection is down' },
   connDownDesc: {
-    'zh-CN': '云端当前与 Broker 无连接，收不到任何车场心跳。请检查边缘计算配置。',
+    'zh-CN': '云端当前与 Broker 无连接，收不到任何节点心跳。请检查边缘计算配置。',
     en: 'The cloud has no live connection to the broker, so heartbeats cannot be received. Check the edge computing configuration.'
   },
   threshold: { 'zh-CN': '离线阈值', en: 'Offline threshold' },
@@ -53,11 +58,12 @@ const d: BiDict = {
     'zh-CN': '自动刷新失败，当前展示的是最近一次成功数据',
     en: 'Auto refresh failed; showing the last successful snapshot'
   },
-  emptyLots: { 'zh-CN': '暂无已启用的车场', en: 'No enabled lots yet' },
-  emptyLotsHint: {
-    'zh-CN': '在车场管理中启用至少一个车场后，此处将展示其心跳状态。',
-    en: 'Enable at least one lot under Lot Management to see its heartbeat status here.'
+  emptyNodes: { 'zh-CN': '暂无边缘节点', en: 'No edge nodes yet' },
+  emptyNodesHint: {
+    'zh-CN': '在「边缘节点管理」中创建并启用节点、绑定车场后，此处将展示各节点心跳状态。',
+    en: 'Create and enable a node, then bind lots under Edge Node Management to see heartbeat status here.'
   },
+  goNodes: { 'zh-CN': '前往节点管理', en: 'Go to node management' },
   loadFailed: { 'zh-CN': '加载失败，请重试', en: 'Failed to load. Try again.' },
   retry: { 'zh-CN': '重新加载', en: 'Reload' }
 }
@@ -65,13 +71,19 @@ const d: BiDict = {
 const { t, locale } = useBiText(d)
 const router = useRouter()
 
-type LotStatus = 'online' | 'offline' | 'unknown'
+type NodeStatus = 'online' | 'offline' | 'unknown'
 
 interface LotItem {
   parkCode: string
   parkName: string | null
-  status: LotStatus
+}
+
+interface NodeItem {
+  nodeCode: string
+  nodeName: string | null
+  status: NodeStatus
   lastSeenAt: string | null
+  lots: LotItem[]
 }
 
 interface HeartbeatStatus {
@@ -82,7 +94,7 @@ interface HeartbeatStatus {
   onlineCount: number
   offlineCount: number
   unknownCount: number
-  lots: LotItem[]
+  nodes: NodeItem[]
 }
 
 const status = ref<HeartbeatStatus | null>(null)
@@ -112,7 +124,7 @@ const statusLine = computed(() => {
 
 const autoTip = computed(() => t('autoTip').replace('{n}', String(REFRESH_MS / 1000)))
 
-function tagOf(row: LotItem): { label: string; type: 'success' | 'danger' | 'info' } {
+function tagOf(row: NodeItem): { label: string; type: 'success' | 'danger' | 'info' } {
   if (row.status === 'online') {
     return { label: t('online'), type: 'success' }
   }
@@ -152,7 +164,7 @@ function relativeText(ms: number): string {
   return isEn ? `${days}d ago` : `${days} 天前`
 }
 
-function lastSeenCell(row: LotItem): { text: string; absolute: string } | null {
+function lastSeenCell(row: NodeItem): { text: string; absolute: string } | null {
   if (!row.lastSeenAt) {
     return null
   }
@@ -165,6 +177,10 @@ function lastSeenCell(row: LotItem): { text: string; absolute: string } | null {
 
 function goConfig() {
   router.push('/system/edge-computing')
+}
+
+function goNodes() {
+  router.push('/system/edge-nodes')
 }
 
 async function fetchStatus(manual = false): Promise<void> {
@@ -306,31 +322,60 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <el-table :data="status.lots" stripe class="lot-table">
-            <el-table-column prop="parkCode" :label="t('colParkCode')" min-width="120" />
-            <el-table-column :label="t('colParkName')" min-width="160">
-              <template #default="{ row }">{{ (row as LotItem).parkName || '—' }}</template>
-            </el-table-column>
-            <el-table-column :label="t('colStatus')" width="120">
+          <el-table :data="status.nodes" stripe class="node-table">
+            <el-table-column type="expand">
               <template #default="{ row }">
-                <el-tag :type="tagOf(row as LotItem).type" effect="light" round>
-                  {{ tagOf(row as LotItem).label }}
+                <div class="expand-wrap">
+                  <template v-if="(row as NodeItem).lots.length">
+                    <el-table :data="(row as NodeItem).lots" size="small" class="sub-table">
+                      <el-table-column prop="parkCode" :label="t('lotCode')" min-width="160" />
+                      <el-table-column :label="t('lotName')" min-width="200">
+                        <template #default="{ row: lotRow }">
+                          {{ (lotRow as LotItem).parkName || '—' }}
+                        </template>
+                      </el-table-column>
+                    </el-table>
+                  </template>
+                  <span v-else class="no-lots">{{ t('noLots') }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="nodeCode" :label="t('colNodeCode')" min-width="140" />
+            <el-table-column :label="t('colNodeName')" min-width="160">
+              <template #default="{ row }">{{ (row as NodeItem).nodeName || '—' }}</template>
+            </el-table-column>
+            <el-table-column :label="t('colStatus')" width="110">
+              <template #default="{ row }">
+                <el-tag :type="tagOf(row as NodeItem).type" effect="light" round>
+                  {{ tagOf(row as NodeItem).label }}
                 </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('colLots')" width="120">
+              <template #default="{ row }">
+                <el-tooltip :content="t('expandHint')" placement="top">
+                  <el-link type="primary" :underline="false">
+                    {{ (row as NodeItem).lots.length }}
+                  </el-link>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column :label="t('colLastSeen')" min-width="220">
               <template #default="{ row }">
-                <template v-if="lastSeenCell(row as LotItem)">
-                  <span class="ago">{{ lastSeenCell(row as LotItem)!.text }}</span>
-                  <span class="wall">· {{ lastSeenCell(row as LotItem)!.absolute }}</span>
+                <template v-if="lastSeenCell(row as NodeItem)">
+                  <span class="ago">{{ lastSeenCell(row as NodeItem)!.text }}</span>
+                  <span class="wall">· {{ lastSeenCell(row as NodeItem)!.absolute }}</span>
                 </template>
                 <span v-else class="never">{{ t('neverSeen') }}</span>
               </template>
             </el-table-column>
 
             <template #empty>
-              <el-empty :description="t('emptyLots')" :image-size="70">
-                <p class="empty-hint">{{ t('emptyLotsHint') }}</p>
+              <el-empty :description="t('emptyNodes')" :image-size="70">
+                <p class="empty-hint">{{ t('emptyNodesHint') }}</p>
+                <el-button type="primary" plain size="small" @click="goNodes">
+                  {{ t('goNodes') }}
+                </el-button>
               </el-empty>
             </template>
           </el-table>
@@ -431,8 +476,22 @@ onBeforeUnmount(() => {
   color: var(--fp-teal);
 }
 
-.lot-table {
+.node-table {
   width: 100%;
+}
+
+.expand-wrap {
+  padding: 8px 24px 12px 48px;
+}
+
+.sub-table {
+  width: 100%;
+  --el-table-border-color: var(--fp-line);
+}
+
+.no-lots {
+  color: var(--fp-muted);
+  font-size: 0.85rem;
 }
 
 .ago {
@@ -450,7 +509,7 @@ onBeforeUnmount(() => {
 }
 
 .empty-hint {
-  margin: 6px 0 0;
+  margin: 6px 0 12px;
   font-size: 0.8rem;
   color: var(--fp-muted);
 }

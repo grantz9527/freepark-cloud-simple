@@ -9,6 +9,9 @@ import java.util.List;
 public interface InternalVehicleRepository
         extends JpaRepository<InternalVehicle, Long>, JpaSpecificationExecutor<InternalVehicle> {
 
+    /** 车场下全部内部车辆（按创建顺序），用于云端全量快照下发 */
+    List<InternalVehicle> findAllByLotIdOrderByIdAsc(Long lotId);
+
     boolean existsByLotIdAndPlateNumberIgnoreCase(Long lotId, String plate);
 
     boolean existsByLotIdAndPlateNumberIgnoreCaseAndIdNot(Long lotId, String plate, Long id);

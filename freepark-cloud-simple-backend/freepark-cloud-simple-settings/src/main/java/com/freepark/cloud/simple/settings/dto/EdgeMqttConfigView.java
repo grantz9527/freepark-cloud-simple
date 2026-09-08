@@ -12,8 +12,8 @@ import java.util.List;
  * @param clientId                  MQTT Client ID
  * @param username                  MQTT 用户名（可空）
  * @param reportSubscribeTopic      上报数据订阅主题（停车系统发布→云端订阅，可空）
- * @param configSyncPublishTopic    配置同步发布主题（云端发布→边缘服务同步到本地，可空）
- * @param heartbeatSubscribeTopic   上行心跳订阅主题（云端订阅各车场心跳，可空；空=不启用心跳监控）
+ * @param configSyncPublishTopic    配置同步发布主题（云端发布→边缘节点同步到本地，可空）
+ * @param heartbeatSubscribeTopic   上行心跳订阅主题（云端订阅各边缘节点心跳，末段为节点编号，可空；空=不启用心跳监控）
  * @param heartbeatOfflineSeconds   心跳离线判定阈值（秒）
  * @param qos                       消息服务质量（0/1/2）
  * @param configSyncIntervalSeconds 配置同步周期（秒）

@@ -51,6 +51,9 @@ public class EdgeMqttConnectionManager {
     /** 上行心跳订阅 QoS：至少一次，避免偶发丢包导致在线误判离线 */
     private static final int HEARTBEAT_SUBSCRIBE_QOS = 1;
 
+    /** 上行流水上报订阅 QoS：至少一次，配合边缘“待同步补推”保证流水不丢 */
+    private static final int REPORT_SUBSCRIBE_QOS = 1;
+
     private final EdgeMqttConfigService configService;
     /** 入站消息消费方（心跳监控等），每条订阅主题送达消息都会扇出给它们 */
     private final List<EdgeInboundConsumer> inboundConsumers;
@@ -315,7 +318,10 @@ public class EdgeMqttConnectionManager {
         }
     }
 
-    /** 期望订阅集合：当前仅“上行心跳监控”订阅心跳订阅主题（QoS 1 保在线判定可靠） */
+    /**
+     * 期望订阅集合：心跳订阅主题 + 上报数据订阅主题（均 QoS 1）。
+     * 心跳用于在线判定；上报订阅用于接收边缘节点同步上来的停车流水等数据。
+     */
     private static Map<String, Integer> desiredSubscriptions(EdgeMqttConfig config) {
         Map<String, Integer> desired = new HashMap<>();
         if (!config.isEnabled()) {
@@ -324,6 +330,10 @@ public class EdgeMqttConnectionManager {
         String heartbeatTopic = config.getHeartbeatSubscribeTopic();
         if (heartbeatTopic != null && !heartbeatTopic.isBlank()) {
             desired.put(heartbeatTopic, HEARTBEAT_SUBSCRIBE_QOS);
+        }
+        String reportTopic = config.getReportSubscribeTopic();
+        if (reportTopic != null && !reportTopic.isBlank()) {
+            desired.put(reportTopic, REPORT_SUBSCRIBE_QOS);
         }
         return desired;
     }

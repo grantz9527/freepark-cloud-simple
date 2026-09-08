@@ -13,9 +13,11 @@ import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.entity.PlateColor;
 import com.freepark.cloud.simple.parking.entity.VehicleType;
 import com.freepark.cloud.simple.parking.entity.WhitelistVehicle;
+import com.freepark.cloud.simple.parking.edge.EdgeDomainChangeNotifier;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
 import com.freepark.cloud.simple.parking.repository.WhitelistVehicleRepository;
 import com.freepark.cloud.simple.parking.support.ParkingSpreadsheetSupport;
+import com.freepark.cloud.simple.settings.runtime.EdgeConfigSyncProtocol;
 import com.freepark.cloud.simple.user.service.AdminGuard;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -48,15 +50,18 @@ public class WhitelistVehicleService {
     private final WhitelistVehicleRepository vehicles;
     private final AdminGuard adminGuard;
     private final SiteZoneProvider siteZoneProvider;
+    private final EdgeDomainChangeNotifier notifier;
 
     public WhitelistVehicleService(ParkingLotRepository lots,
                                    WhitelistVehicleRepository vehicles,
                                    AdminGuard adminGuard,
-                                   SiteZoneProvider siteZoneProvider) {
+                                   SiteZoneProvider siteZoneProvider,
+                                   EdgeDomainChangeNotifier notifier) {
         this.lots = lots;
         this.vehicles = vehicles;
         this.adminGuard = adminGuard;
         this.siteZoneProvider = siteZoneProvider;
+        this.notifier = notifier;
     }
 
     @Transactional(readOnly = true)
@@ -96,13 +101,15 @@ public class WhitelistVehicleService {
         vehicle.setStartTime(startTime);
         vehicle.setEndTime(request.endTime());
         vehicle.setEnabled(enabled);
-        return WhitelistVehicleView.from(vehicles.save(vehicle));
+        WhitelistVehicle saved = vehicles.save(vehicle);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_WHITELIST, lot.getCode(), saved);
+        return WhitelistVehicleView.from(saved);
     }
 
     @Transactional
     public WhitelistVehicleView updateVehicle(Long lotId, Long vehicleId, UpdateWhitelistVehicleRequest request) {
         adminGuard.requireEnabledAdmin();
-        requireLot(lotId);
+        ParkingLot lot = requireLot(lotId);
         WhitelistVehicle vehicle = requireVehicle(vehicleId);
         if (!vehicle.getLot().getId().equals(lotId)) {
             throw new BizException(404, MessageKeys.COMMON_NOT_FOUND);
@@ -123,18 +130,21 @@ public class WhitelistVehicleService {
         vehicle.setStartTime(startTime);
         vehicle.setEndTime(request.endTime());
         vehicle.setEnabled(enabled);
-        return WhitelistVehicleView.from(vehicles.save(vehicle));
+        WhitelistVehicle saved = vehicles.save(vehicle);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_WHITELIST, lot.getCode(), saved);
+        return WhitelistVehicleView.from(saved);
     }
 
     @Transactional
     public void deleteVehicle(Long lotId, Long vehicleId) {
         adminGuard.requireEnabledAdmin();
-        requireLot(lotId);
+        ParkingLot lot = requireLot(lotId);
         WhitelistVehicle vehicle = requireVehicle(vehicleId);
         if (!vehicle.getLot().getId().equals(lotId)) {
             throw new BizException(404, MessageKeys.COMMON_NOT_FOUND);
         }
         vehicles.delete(vehicle);
+        notifier.delete(EdgeConfigSyncProtocol.DOMAIN_WHITELIST, lot.getCode(), vehicle.getId());
     }
 
     @Transactional
@@ -145,6 +155,7 @@ public class WhitelistVehicleService {
                 file, ParkingSpreadsheetSupport.WHITELIST_COLUMN_COUNT);
         int imported = 0;
         int skipped = 0;
+        List<WhitelistVehicle> created = new ArrayList<>();
         for (String[] cells : rows) {
             String plate = ParkingSpreadsheetSupport.cell(cells, 0);
             String owner = ParkingSpreadsheetSupport.cell(cells, 1);
@@ -182,8 +193,11 @@ public class WhitelistVehicleService {
             vehicle.setStartTime(startTime);
             vehicle.setEndTime(endTime);
             vehicle.setEnabled(true);
-            vehicles.save(vehicle);
+            created.add(vehicles.save(vehicle));
             imported++;
+        }
+        if (!created.isEmpty()) {
+            notifier.upserts(EdgeConfigSyncProtocol.DOMAIN_WHITELIST, lot.getCode(), created);
         }
         return new VehicleImportResult(null, imported, skipped);
     }

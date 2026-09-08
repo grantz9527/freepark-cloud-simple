@@ -102,6 +102,8 @@ const d: BiDict = {
   updateSuccess: { 'zh-CN': '车辆更新成功', en: 'Vehicle updated' },
   deleteTitle: { 'zh-CN': '删除确认', en: 'Confirm deletion' },
   deleteConfirm: { 'zh-CN': '确定删除车辆「{plate}」吗？', en: 'Delete vehicle "{plate}"?' },
+  copySuccess: { 'zh-CN': '已复制车牌：{plate}', en: 'Plate copied: {plate}' },
+  copyFailed: { 'zh-CN': '复制失败，请重试', en: 'Copy failed, try again' },
   deleteSuccess: { 'zh-CN': '车辆已删除', en: 'Vehicle deleted' },
   batchDeleteTitle: { 'zh-CN': '删除批次确认', en: 'Confirm batch deletion' },
   batchDeleteConfirm: {
@@ -164,8 +166,88 @@ function plateColorLabel(color: string): string {
   return locale.value === 'en' ? entry.en : entry.zh
 }
 
+/** 车牌底色样式：按车牌颜色渲染仿真实车牌（蓝牌/黄牌/新能源渐变绿等），与停车流水/白名单一致。 */
+const PLATE_STYLES: Record<string, { background: string; color: string; boxShadow: string }> = {
+  BLUE: {
+    background: 'linear-gradient(135deg, #2b6ae0, #0d3fa8)',
+    color: '#ffffff',
+    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.22)'
+  },
+  YELLOW: {
+    background: 'linear-gradient(135deg, #ffd83d, #f2a900)',
+    color: '#332400',
+    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.15)'
+  },
+  GREEN: {
+    background: 'linear-gradient(160deg, #2fce7d 0%, #0d9a58 55%, #0b7f49 100%)',
+    color: '#ffffff',
+    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.25)'
+  },
+  YELLOW_GREEN: {
+    background: 'linear-gradient(135deg, #b6e24b, #7cb305)',
+    color: '#243a00',
+    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.14)'
+  },
+  BLACK: {
+    background: 'linear-gradient(135deg, #3d4450, #161a20)',
+    color: '#ffffff',
+    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.16)'
+  },
+  WHITE: {
+    background: '#ffffff',
+    color: '#1f2937',
+    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.16)'
+  },
+  OTHER: {
+    background: 'linear-gradient(135deg, #e8edf2, #cbd5e1)',
+    color: '#334155',
+    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)'
+  }
+}
+
+function plateBadgeStyle(color: string | null | undefined): { background: string; color: string; boxShadow: string } {
+  return (color && PLATE_STYLES[color]) || PLATE_STYLES.BLUE
+}
+
+/** 点击车牌复制车牌号到剪贴板。 */
+async function handleCopyPlate(row: InternalVehicleItem) {
+  const text = (row.plateNumber ?? '').trim()
+  if (!text) {
+    return
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const area = document.createElement('textarea')
+      area.value = text
+      area.style.position = 'fixed'
+      area.style.opacity = '0'
+      document.body.appendChild(area)
+      area.select()
+      document.execCommand('copy')
+      document.body.removeChild(area)
+    }
+    ElMessage.success(t('copySuccess').replace('{plate}', text))
+  } catch {
+    ElMessage.error(t('copyFailed'))
+  }
+}
+
 function shortBatchId(batchId: string): string {
   return batchId.length > 8 ? batchId.slice(0, 8) : batchId
+}
+
+function formatTime(value?: string): string {
+  if (!value) {
+    return '-'
+  }
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})/.exec(value)
+  if (!match) {
+    return value
+  }
+  const pad = (n: string): string => n.padStart(2, '0')
+  return `${match[1]}-${pad(match[2])}-${pad(match[3])} ${pad(match[4])}:${match[5]}`
 }
 
 /* ---------------- 列表状态 ---------------- */
@@ -591,10 +673,11 @@ onMounted(() => {
         <el-table v-loading="loading" :data="rows" stripe>
           <el-table-column :label="t('plate')" min-width="180">
             <template #default="{ row }">
-              <span class="plate-text">{{ row.plateNumber }}</span>
-              <el-tag size="small" effect="plain" class="color-tag">
-                {{ plateColorLabel(row.plateColor) }}
-              </el-tag>
+              <el-tooltip :disabled="!row.plateColor" :content="plateColorLabel(row.plateColor)" placement="top">
+                <span class="plate-badge" :style="plateBadgeStyle(row.plateColor)" @click="handleCopyPlate(row)">
+                  {{ row.plateNumber }}
+                </span>
+              </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column prop="ownerName" :label="t('owner')" min-width="130" />
@@ -625,7 +708,9 @@ onMounted(() => {
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="updatedAt" :label="t('updateTime')" min-width="170" />
+          <el-table-column :label="t('updateTime')" min-width="170">
+            <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
+          </el-table-column>
           <el-table-column :label="t('actions')" width="180" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openEditDialog(row)">{{ t('edit') }}</el-button>
@@ -841,13 +926,26 @@ onMounted(() => {
   margin-top: 16px;
 }
 
-.plate-text {
-  font-weight: 600;
-  margin-right: 8px;
+.plate-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  padding: 1px 7px 2px 8px;
+  font-family: 'Segoe UI', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.55;
+  vertical-align: middle;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.12s ease, filter 0.12s ease;
 }
 
-.color-tag {
-  margin-right: 2px;
+.plate-badge:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
 }
 
 .batch-tag {

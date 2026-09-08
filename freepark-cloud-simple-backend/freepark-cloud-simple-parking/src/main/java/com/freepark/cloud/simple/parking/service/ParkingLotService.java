@@ -12,7 +12,9 @@ import com.freepark.cloud.simple.parking.dto.UpdateLotRequest;
 import com.freepark.cloud.simple.parking.entity.InterceptRuleType;
 import com.freepark.cloud.simple.parking.entity.LotType;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
+import com.freepark.cloud.simple.parking.edge.EdgeDomainChangeNotifier;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
+import com.freepark.cloud.simple.settings.runtime.EdgeConfigSyncProtocol;
 import com.freepark.cloud.simple.user.service.AdminGuard;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,16 +24,20 @@ import java.util.List;
 
 /**
  * 停车场服务：车场基础资料、出入口拦截配置、通行判定顺序。
+ * 任何写成功后发布 lot 域增量（upsert），由边缘配置同步在事务提交后下发。
  */
 @Service
 public class ParkingLotService {
 
     private final ParkingLotRepository lots;
     private final AdminGuard adminGuard;
+    private final EdgeDomainChangeNotifier notifier;
 
-    public ParkingLotService(ParkingLotRepository lots, AdminGuard adminGuard) {
+    public ParkingLotService(ParkingLotRepository lots, AdminGuard adminGuard,
+            EdgeDomainChangeNotifier notifier) {
         this.lots = lots;
         this.adminGuard = adminGuard;
+        this.notifier = notifier;
     }
 
     @Transactional(readOnly = true)
@@ -61,7 +67,9 @@ public class ParkingLotService {
         lot.setAddress(address);
         lot.setTotalSpaces(totalSpaces);
         lot.setEnabled(enabled);
-        return LotView.from(lots.save(lot));
+        ParkingLot saved = lots.save(lot);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_LOT, saved.getCode(), saved);
+        return LotView.from(saved);
     }
 
     @Transactional
@@ -81,7 +89,9 @@ public class ParkingLotService {
         if (request.mapData() != null) {
             lot.setMapData(request.mapData());
         }
-        return LotView.from(lots.save(lot));
+        ParkingLot saved = lots.save(lot);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_LOT, saved.getCode(), saved);
+        return LotView.from(saved);
     }
 
     @Transactional(readOnly = true)
@@ -99,7 +109,9 @@ public class ParkingLotService {
         lot.setEntryInterceptBlacklist(entryRules.contains(InterceptRuleType.BLACKLIST));
         lot.setExitInterceptArrears(exitRules.contains(InterceptRuleType.ARREARS));
         lot.setExitInterceptBlacklist(exitRules.contains(InterceptRuleType.BLACKLIST));
-        return LotInterceptView.from(lots.save(lot));
+        ParkingLot saved = lots.save(lot);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_LOT, saved.getCode(), saved);
+        return LotInterceptView.from(saved);
     }
 
     @Transactional(readOnly = true)
@@ -120,7 +132,9 @@ public class ParkingLotService {
                 .map(Enum::name)
                 .reduce((a, b) -> a + "," + b)
                 .orElse(ParkingLot.DEFAULT_JUDGMENT_ORDER));
-        return AccessJudgmentView.from(lots.save(lot));
+        ParkingLot saved = lots.save(lot);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_LOT, saved.getCode(), saved);
+        return AccessJudgmentView.from(saved);
     }
 
     private ParkingLot requireLot(Long lotId) {

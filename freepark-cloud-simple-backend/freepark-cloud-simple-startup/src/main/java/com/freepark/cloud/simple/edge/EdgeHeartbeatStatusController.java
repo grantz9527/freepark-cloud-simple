@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 边缘监控-车场上行心跳在线状态查询（只读，启用中的管理员可访问；
+ * 边缘监控-边缘节点上行心跳在线状态查询（只读，启用中的管理员可访问；
  * 页面入口与边缘计算配置同属系统管理菜单，按菜单角色限制为超管）。
  */
 @RestController
@@ -15,17 +15,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class EdgeHeartbeatStatusController {
 
     private final AdminGuard adminGuard;
-    private final LotEdgeHeartbeatListener heartbeatListener;
+    private final EdgeHeartbeatAggregator heartbeatAggregator;
 
     public EdgeHeartbeatStatusController(AdminGuard adminGuard,
-            LotEdgeHeartbeatListener heartbeatListener) {
+            EdgeHeartbeatAggregator heartbeatAggregator) {
         this.adminGuard = adminGuard;
-        this.heartbeatListener = heartbeatListener;
+        this.heartbeatAggregator = heartbeatAggregator;
     }
 
     @GetMapping("/status")
     public ApiResult<EdgeHeartbeatStatusView> status() {
         adminGuard.requireEnabledAdmin();
-        return ApiResult.ok(heartbeatListener.status());
+        return ApiResult.ok(heartbeatAggregator.status());
     }
 }

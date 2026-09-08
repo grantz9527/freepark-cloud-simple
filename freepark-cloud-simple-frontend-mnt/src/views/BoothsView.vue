@@ -104,6 +104,18 @@ function errorTextOf(e: unknown, fallback: string): string {
   return e instanceof Error && e.message ? e.message : fallback
 }
 
+function formatTime(value?: string): string {
+  if (!value) {
+    return '-'
+  }
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})/.exec(value)
+  if (!match) {
+    return value
+  }
+  const pad = (n: string): string => n.padStart(2, '0')
+  return `${match[1]}-${pad(match[2])}-${pad(match[3])} ${pad(match[4])}:${match[5]}`
+}
+
 /* ---------------- 列表状态 ---------------- */
 
 const loading = ref(false)
@@ -383,7 +395,9 @@ onMounted(() => {
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="updatedAt" :label="t('updateTime')" min-width="170" />
+          <el-table-column :label="t('updateTime')" min-width="170">
+            <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
+          </el-table-column>
           <el-table-column :label="t('actions')" width="130" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openEditDialog(row)">{{ t('edit') }}</el-button>

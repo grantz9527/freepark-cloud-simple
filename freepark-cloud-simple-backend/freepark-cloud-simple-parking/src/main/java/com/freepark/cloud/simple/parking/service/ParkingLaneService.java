@@ -8,8 +8,10 @@ import com.freepark.cloud.simple.parking.dto.UpdateLaneRequest;
 import com.freepark.cloud.simple.parking.entity.LaneType;
 import com.freepark.cloud.simple.parking.entity.ParkingLane;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
+import com.freepark.cloud.simple.parking.edge.EdgeDomainChangeNotifier;
 import com.freepark.cloud.simple.parking.repository.ParkingLaneRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
+import com.freepark.cloud.simple.settings.runtime.EdgeConfigSyncProtocol;
 import com.freepark.cloud.simple.user.service.AdminGuard;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,13 +28,16 @@ public class ParkingLaneService {
     private final ParkingLotRepository lots;
     private final ParkingLaneRepository lanes;
     private final AdminGuard adminGuard;
+    private final EdgeDomainChangeNotifier notifier;
 
     public ParkingLaneService(ParkingLotRepository lots,
                               ParkingLaneRepository lanes,
-                              AdminGuard adminGuard) {
+                              AdminGuard adminGuard,
+                              EdgeDomainChangeNotifier notifier) {
         this.lots = lots;
         this.lanes = lanes;
         this.adminGuard = adminGuard;
+        this.notifier = notifier;
     }
 
     @Transactional(readOnly = true)
@@ -66,7 +71,9 @@ public class ParkingLaneService {
         lane.setCode(code);
         lane.setLaneType(laneType);
         lane.setEnabled(enabled);
-        return LaneView.from(lanes.save(lane));
+        ParkingLane saved = lanes.save(lane);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_LANE, lot.getCode(), saved);
+        return LaneView.from(saved);
     }
 
     @Transactional
@@ -85,7 +92,9 @@ public class ParkingLaneService {
         lane.setName(normalizeRequired(request.name()));
         lane.setLaneType(laneType);
         lane.setEnabled(enabled);
-        return LaneView.from(lanes.save(lane));
+        ParkingLane saved = lanes.save(lane);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_LANE, lot.getCode(), saved);
+        return LaneView.from(saved);
     }
 
     private ParkingLot resolveLinkedLot(Long lotId, Long linkedLotId) {

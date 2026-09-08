@@ -19,7 +19,8 @@ public final class EdgeMqttConfigOptions {
     public static final String DEFAULT_CLIENT_ID = "freepark-cloud-edge";
     /** 默认 QoS：至少一次，保证配置快照不丢失；整包幂等可容忍重复 */
     public static final int DEFAULT_QOS = 1;
-    public static final int DEFAULT_CONFIG_SYNC_INTERVAL_SECONDS = 60;
+    /** 默认配置同步周期（秒）：每 24 小时一次全量快照，测试期可在前端/接口临时调小 */
+    public static final int DEFAULT_CONFIG_SYNC_INTERVAL_SECONDS = 86400;
     public static final int DEFAULT_KEEP_ALIVE_SECONDS = 60;
     /** 默认心跳离线判定阈值（秒）：超过该时长未收到某车场心跳即判定离线 */
     public static final int DEFAULT_HEARTBEAT_OFFLINE_SECONDS = 90;

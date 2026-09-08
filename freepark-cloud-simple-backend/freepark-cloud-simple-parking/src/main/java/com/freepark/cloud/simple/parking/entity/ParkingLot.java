@@ -80,6 +80,13 @@ public class ParkingLot {
     @Column(name = "map_data", columnDefinition = "TEXT")
     private String mapData;
 
+    /**
+     * 所属边缘节点编号（可空）：为空表示本车场暂不纳入任何边缘节点管辖。
+     * 绑定关系以“车场→节点”的单向编码表达，一个车场最多属于一个节点。
+     */
+    @Column(name = "edge_node_code", length = 64)
+    private String edgeNodeCode;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -223,6 +230,14 @@ public class ParkingLot {
 
     public void setMapData(String mapData) {
         this.mapData = mapData;
+    }
+
+    public String getEdgeNodeCode() {
+        return edgeNodeCode;
+    }
+
+    public void setEdgeNodeCode(String edgeNodeCode) {
+        this.edgeNodeCode = edgeNodeCode;
     }
 
     public LocalDateTime getCreatedAt() {

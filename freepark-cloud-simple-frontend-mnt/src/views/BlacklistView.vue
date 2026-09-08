@@ -77,6 +77,8 @@ const d: BiDict = {
   errExport: { 'zh-CN': '导出失败', en: 'Failed to export' },
   errTemplate: { 'zh-CN': '模板下载失败', en: 'Failed to download template' },
   errImport: { 'zh-CN': '导入失败', en: 'Import failed' },
+  copySuccess: { 'zh-CN': '已复制车牌：{plate}', en: 'Plate copied: {plate}' },
+  copyFailed: { 'zh-CN': '复制失败，请重试', en: 'Copy failed, try again' },
   importTitle: { 'zh-CN': '批量导入黑名单', en: 'Batch Import Blacklist' },
   importStepHint: {
     'zh-CN': '支持 .xlsx 文件，请先下载模板填写后上传；时间非法等数据行将被跳过。',
@@ -166,6 +168,74 @@ function importDoneText(imported: number, skipped: number): string {
 
 function colorLabel(color: string): string {
   return t(`color.${color}`)
+}
+
+/** 车牌底色样式：按车牌颜色渲染仿真实车牌（蓝牌/黄牌/新能源渐变绿等），与停车流水一致。 */
+const PLATE_STYLES: Record<string, { background: string; color: string; boxShadow: string }> = {
+  BLUE: {
+    background: 'linear-gradient(135deg, #2b6ae0, #0d3fa8)',
+    color: '#ffffff',
+    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.22)'
+  },
+  YELLOW: {
+    background: 'linear-gradient(135deg, #ffd83d, #f2a900)',
+    color: '#332400',
+    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.15)'
+  },
+  GREEN: {
+    background: 'linear-gradient(160deg, #2fce7d 0%, #0d9a58 55%, #0b7f49 100%)',
+    color: '#ffffff',
+    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.25)'
+  },
+  YELLOW_GREEN: {
+    background: 'linear-gradient(135deg, #b6e24b, #7cb305)',
+    color: '#243a00',
+    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.14)'
+  },
+  BLACK: {
+    background: 'linear-gradient(135deg, #3d4450, #161a20)',
+    color: '#ffffff',
+    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.16)'
+  },
+  WHITE: {
+    background: '#ffffff',
+    color: '#1f2937',
+    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.16)'
+  },
+  OTHER: {
+    background: 'linear-gradient(135deg, #e8edf2, #cbd5e1)',
+    color: '#334155',
+    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)'
+  }
+}
+
+function plateBadgeStyle(color: string | null | undefined): { background: string; color: string; boxShadow: string } {
+  return (color && PLATE_STYLES[color]) || PLATE_STYLES.BLUE
+}
+
+/** 点击车牌复制车牌号到剪贴板。 */
+async function handleCopyPlate(row: BlacklistItem) {
+  const text = (row.plateNumber ?? '').trim()
+  if (!text) {
+    return
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const area = document.createElement('textarea')
+      area.value = text
+      area.style.position = 'fixed'
+      area.style.opacity = '0'
+      document.body.appendChild(area)
+      area.select()
+      document.execCommand('copy')
+      document.body.removeChild(area)
+    }
+    ElMessage.success(t('copySuccess').replace('{plate}', text))
+  } catch {
+    ElMessage.error(t('copyFailed'))
+  }
 }
 
 /* ---------------- 车场加载与切换 ---------------- */
@@ -512,12 +582,13 @@ onMounted(async () => {
       </div>
 
       <el-table v-loading="loading" :data="rows" stripe>
-        <el-table-column :label="t('thPlate')" min-width="170">
+        <el-table-column :label="t('thPlate')" min-width="150">
           <template #default="{ row }">
-            <div class="plate-cell">
-              <span class="plate-num">{{ row.plateNumber }}</span>
-              <span class="plate-color">{{ colorLabel(row.plateColor) }}</span>
-            </div>
+            <el-tooltip :disabled="!row.plateColor" :content="colorLabel(row.plateColor)" placement="top">
+              <span class="plate-badge" :style="plateBadgeStyle(row.plateColor)" @click="handleCopyPlate(row)">
+                {{ row.plateNumber }}
+              </span>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column prop="ownerName" :label="t('thOwner')" min-width="130" show-overflow-tooltip />
@@ -731,21 +802,26 @@ onMounted(async () => {
   flex: 1;
 }
 
-.plate-cell {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.plate-num {
-  font-weight: 600;
-  font-family: var(--fp-font-display);
-}
-
-.plate-color {
-  font-size: 0.75rem;
-  color: var(--fp-muted);
+.plate-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  padding: 1px 7px 2px 8px;
+  font-family: 'Segoe UI', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.55;
+  vertical-align: middle;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
   white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.plate-badge:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
 }
 
 .pagination {

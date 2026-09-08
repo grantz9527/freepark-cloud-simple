@@ -54,11 +54,14 @@ public class BillingSessionChargeService {
      * @param plateColor  车牌颜色（{@code null} = 未知，只可能命中默认绑定）
      * @param entryAnchor 入场时间（UTC 锚点）
      * @param exitAnchor  出场时间（UTC 锚点）
+     * @param freeMinutes 每次入场的免费时长（分钟，{@code null} / ≤0 = 不减免）；
+     *                    免费时长从计费起点顺延起算，停时长短于免费时长时应收 0 元
      * @return 应收金额；未计费 / 不可结算时返回 {@code null}
      */
     @Transactional(readOnly = true)
     public BigDecimal chargeFor(Long lotId, String plateColor,
-                                LocalDateTime entryAnchor, LocalDateTime exitAnchor) {
+                                LocalDateTime entryAnchor, LocalDateTime exitAnchor,
+                                Integer freeMinutes) {
         if (lotId == null || entryAnchor == null || exitAnchor == null
                 || !exitAnchor.isAfter(entryAnchor)) {
             return null;
@@ -96,6 +99,19 @@ public class BillingSessionChargeService {
         }
         if (!chargedEndWall.isAfter(chargedStartWall)) {
             return null;
+        }
+
+        // 每次入场免费时长（自入场时刻顺延）：整段停车落在免费时长内 → 应收 0 元（免缴费）；
+        // 超出免费时长的部分，计费起点收敛到免费窗口结束时刻（仍在绑定生效期内才生效）。
+        if (freeMinutes != null && freeMinutes > 0) {
+            LocalDateTime freeEndWall = entryWall.plusMinutes(freeMinutes);
+            if (chargedEndWall.isAfter(freeEndWall)) {
+                if (chargedStartWall.isBefore(freeEndWall)) {
+                    chargedStartWall = freeEndWall;
+                }
+            } else {
+                return BigDecimal.ZERO;
+            }
         }
 
         BillingSimulateRequest interval = new BillingSimulateRequest(

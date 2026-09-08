@@ -8,8 +8,10 @@ import com.freepark.cloud.simple.parking.dto.PatternAllowlistView;
 import com.freepark.cloud.simple.parking.dto.UpdatePatternAllowlistRequest;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.entity.PatternAllowlist;
+import com.freepark.cloud.simple.parking.edge.EdgeDomainChangeNotifier;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
 import com.freepark.cloud.simple.parking.repository.PatternAllowlistRepository;
+import com.freepark.cloud.simple.settings.runtime.EdgeConfigSyncProtocol;
 import com.freepark.cloud.simple.user.service.AdminGuard;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -36,13 +38,16 @@ public class PatternAllowlistService {
     private final ParkingLotRepository lots;
     private final PatternAllowlistRepository entries;
     private final AdminGuard adminGuard;
+    private final EdgeDomainChangeNotifier notifier;
 
     public PatternAllowlistService(ParkingLotRepository lots,
                                    PatternAllowlistRepository entries,
-                                   AdminGuard adminGuard) {
+                                   AdminGuard adminGuard,
+                                   EdgeDomainChangeNotifier notifier) {
         this.lots = lots;
         this.entries = entries;
         this.adminGuard = adminGuard;
+        this.notifier = notifier;
     }
 
     @Transactional(readOnly = true)
@@ -77,13 +82,15 @@ public class PatternAllowlistService {
         entry.setPattern(pattern);
         entry.setRemark(normalizeOptional(request.remark()));
         entry.setEnabled(enabled);
-        return PatternAllowlistView.from(entries.save(entry));
+        PatternAllowlist saved = entries.save(entry);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_PATTERN, lot.getCode(), saved);
+        return PatternAllowlistView.from(saved);
     }
 
     @Transactional
     public PatternAllowlistView updateEntry(Long lotId, Long entryId, UpdatePatternAllowlistRequest request) {
         adminGuard.requireEnabledAdmin();
-        requireLot(lotId);
+        ParkingLot lot = requireLot(lotId);
         PatternAllowlist entry = requireEntry(entryId);
         if (!entry.getLot().getId().equals(lotId)) {
             throw new BizException(404, MessageKeys.COMMON_NOT_FOUND);
@@ -101,18 +108,21 @@ public class PatternAllowlistService {
         entry.setPattern(pattern);
         entry.setRemark(normalizeOptional(request.remark()));
         entry.setEnabled(enabled);
-        return PatternAllowlistView.from(entries.save(entry));
+        PatternAllowlist saved = entries.save(entry);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_PATTERN, lot.getCode(), saved);
+        return PatternAllowlistView.from(saved);
     }
 
     @Transactional
     public void deleteEntry(Long lotId, Long entryId) {
         adminGuard.requireEnabledAdmin();
-        requireLot(lotId);
+        ParkingLot lot = requireLot(lotId);
         PatternAllowlist entry = requireEntry(entryId);
         if (!entry.getLot().getId().equals(lotId)) {
             throw new BizException(404, MessageKeys.COMMON_NOT_FOUND);
         }
         entries.delete(entry);
+        notifier.delete(EdgeConfigSyncProtocol.DOMAIN_PATTERN, lot.getCode(), entry.getId());
     }
 
     private Specification<PatternAllowlist> buildSpec(Long lotId, String keyword) {

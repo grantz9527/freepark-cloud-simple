@@ -18,13 +18,13 @@ const d: BiDict = {
   sectionConnection: { 'zh-CN': '连接参数', en: 'Connection' },
   sectionTopics: { 'zh-CN': '主题与周期', en: 'Topics & Interval' },
   sectionTopicsHint: {
-    'zh-CN': '订阅主题接收停车系统上报的数据；配置同步发布主题填写“前缀”，云端会按车场自动拼接出专属主题“{前缀}/{车场编码}”并定时下发。',
-    en: 'The subscribe topic receives data reported by parking systems. The config sync publish topic is a prefix: the cloud appends "/<lot code>" to deliver per-lot configuration on schedule.'
+    'zh-CN': '订阅主题接收停车系统上报的数据；配置同步发布主题填写“前缀”，云端会按边缘节点自动拼接出专属主题“{前缀}/{节点编号}”，并把该节点管辖的全部车场配置打包定时下发。',
+    en: 'The subscribe topic receives data reported by parking systems. The config sync publish topic is a prefix: the cloud appends "/<node code>" and delivers that node\u2019s managed lot configurations on schedule.'
   },
   enabled: { 'zh-CN': '启用边缘计算接入', en: 'Enable edge computing' },
   enabledHint: {
-    'zh-CN': '开启后，云端将订阅停车系统上报的数据，并按“配置同步周期”把各车场配置通过专属主题下发到其它边缘计算服务。',
-    en: 'When enabled, the cloud subscribes to parking system reports and publishes each lot\u2019s configuration to its own topic on the sync interval.'
+    'zh-CN': '开启后，云端将订阅停车系统上报的数据，并按“配置同步周期”把各边缘节点管辖的车场配置打包，通过“{前缀}/{节点编号}”专属主题下发到对应边缘盒子。',
+    en: 'When enabled, the cloud subscribes to parking system reports and publishes each edge node\u2019s managed lot configurations to its own "{prefix}/{node code}" topic on the sync interval.'
   },
   brokerHost: { 'zh-CN': 'Broker 地址', en: 'Broker host' },
   brokerHostPlaceholder: { 'zh-CN': '如 127.0.0.1 或 mqtt.example.com', en: 'e.g. 127.0.0.1 or mqtt.example.com' },
@@ -36,27 +36,32 @@ const d: BiDict = {
   password: { 'zh-CN': '密码', en: 'Password' },
   passwordPlaceholder: { 'zh-CN': '留空表示保持不变', en: 'Leave blank to keep unchanged' },
   reportSubscribeTopic: { 'zh-CN': '上报数据订阅主题', en: 'Report data subscribe topic' },
-  reportSubscribeTopicPlaceholder: { 'zh-CN': '如 parking/report/device/#', en: 'e.g. parking/report/device/#' },
+  reportSubscribeTopicPlaceholder: { 'zh-CN': '如 parking/report/#（与本地“上报主题前缀”一致，末尾加 /#）', en: 'e.g. parking/report/# (match the local report topic prefix, append /#)' },
   configSyncPublishTopic: { 'zh-CN': '配置同步发布主题前缀', en: 'Config sync publish topic prefix' },
-  configSyncPublishTopicPlaceholder: { 'zh-CN': '如 cloud/config/sync（云端自动拼接 /车场编码）', en: 'e.g. cloud/config/sync (lot code appended)' },
+  configSyncPublishTopicPlaceholder: { 'zh-CN': '如 cloud/config/sync（云端自动拼接 /节点编号）', en: 'e.g. cloud/config/sync (node code appended)' },
   configSyncPublishTopicHint: {
     'zh-CN': '不允许包含空格或 MQTT 通配符（# / +），末尾的 / 会被自动去掉。',
     en: 'Whitespace and MQTT wildcards (# / +) are not allowed; a trailing / is trimmed automatically.'
   },
   sectionHeartbeat: { 'zh-CN': '心跳监控', en: 'Heartbeat Monitoring' },
   sectionHeartbeatHint: {
-    'zh-CN': '开启后，云端订阅车场上报的心跳：超过“离线判定阈值”未收到心跳即判定该车场离线，并在“边缘监控”页展示在线状态。',
-    en: 'When enabled, the cloud subscribes to lot heartbeats: a lot is flagged offline if no heartbeat arrives within the offline threshold, and its status is shown on the Edge Monitoring page.'
+    'zh-CN': '开启后，云端订阅各边缘节点上行的心跳（主题末段即节点编号）：超过“离线判定阈值”未收到心跳即判定该节点离线，并在“边缘监控”页展示节点及其管辖车场的在线状态。',
+    en: 'When enabled, the cloud subscribes to heartbeats from edge nodes (the topic\u2019s last segment is the node code): a node is flagged offline if no heartbeat arrives within the offline threshold, and its status is shown on the Edge Monitoring page.'
   },
   heartbeatSubscribeTopic: { 'zh-CN': '心跳订阅主题', en: 'Heartbeat subscribe topic' },
   heartbeatSubscribeTopicPlaceholder: {
-    'zh-CN': '如 edge/heartbeat/#；留空表示关闭心跳监控',
-    en: 'e.g. edge/heartbeat/#; blank disables monitoring'
+    'zh-CN': '如 parking/heartbeat/#；留空表示关闭心跳监控',
+    en: 'e.g. parking/heartbeat/#; blank disables monitoring'
+  },
+  heartbeatSubscribeTopicHint: {
+    'zh-CN':
+      '与本地边缘节点填写的“心跳主题路径”一致，并在末尾加 /# 通配：本地填 parking/heartbeat 时此处填 parking/heartbeat/#，即可监控该路径下的所有节点。',
+    en: 'Keep it identical to the local node\u2019s “Heartbeat topic path”, appending /# so it covers every node: if the node fills parking/heartbeat locally, fill parking/heartbeat/# here.'
   },
   heartbeatOfflineSeconds: { 'zh-CN': '离线判定阈值（秒）', en: 'Offline threshold (s)' },
   heartbeatOfflineSecondsHint: {
-    'zh-CN': '支持 MQTT 通配符；超过阈值未收到心跳即判定离线。',
-    en: 'MQTT wildcards are supported; a lot is offline after this many seconds without a heartbeat.'
+    'zh-CN': '支持 MQTT 通配符；超过阈值未收到某节点心跳即判定该节点离线。',
+    en: 'MQTT wildcards are supported; a node is offline after this many seconds without a heartbeat.'
   },
   qos: { 'zh-CN': 'QoS', en: 'QoS' },
   configSyncInterval: { 'zh-CN': '配置同步周期（秒）', en: 'Config sync interval (s)' },
@@ -127,7 +132,7 @@ const updatedAt = ref('')
 const qosOptions = [0, 1, 2]
 
 // 留空时自动补用的默认主题参数
-const DEFAULT_REPORT_TOPIC = 'parking/report/device/#'
+const DEFAULT_REPORT_TOPIC = 'parking/report/#'
 const DEFAULT_CONFIG_SYNC_PREFIX = 'cloud/config/sync'
 
 function emptyToNull(value: string): string | null {
@@ -361,6 +366,7 @@ onMounted(loadConfig)
               clearable
               class="field"
             />
+            <div class="field-hint">{{ t('heartbeatSubscribeTopicHint') }}</div>
           </el-form-item>
           <el-form-item :label="t('heartbeatOfflineSeconds')" required>
             <el-input-number

@@ -11,9 +11,11 @@ import com.freepark.cloud.simple.parking.entity.InternalVehicle;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.entity.PlateColor;
 import com.freepark.cloud.simple.parking.entity.VehicleType;
+import com.freepark.cloud.simple.parking.edge.EdgeDomainChangeNotifier;
 import com.freepark.cloud.simple.parking.repository.InternalVehicleRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
 import com.freepark.cloud.simple.parking.support.ParkingSpreadsheetSupport;
+import com.freepark.cloud.simple.settings.runtime.EdgeConfigSyncProtocol;
 import com.freepark.cloud.simple.user.service.AdminGuard;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -42,13 +44,16 @@ public class InternalVehicleService {
     private final ParkingLotRepository lots;
     private final InternalVehicleRepository vehicles;
     private final AdminGuard adminGuard;
+    private final EdgeDomainChangeNotifier notifier;
 
     public InternalVehicleService(ParkingLotRepository lots,
                                   InternalVehicleRepository vehicles,
-                                  AdminGuard adminGuard) {
+                                  AdminGuard adminGuard,
+                                  EdgeDomainChangeNotifier notifier) {
         this.lots = lots;
         this.vehicles = vehicles;
         this.adminGuard = adminGuard;
+        this.notifier = notifier;
     }
 
     @Transactional(readOnly = true)
@@ -87,13 +92,15 @@ public class InternalVehicleService {
         vehicle.setDepartment(normalizeOptional(request.department()));
         vehicle.setRemark(normalizeOptional(request.remark()));
         vehicle.setEnabled(enabled);
-        return InternalVehicleView.from(vehicles.save(vehicle));
+        InternalVehicle saved = vehicles.save(vehicle);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_INTERNAL, lot.getCode(), saved);
+        return InternalVehicleView.from(saved);
     }
 
     @Transactional
     public InternalVehicleView updateVehicle(Long lotId, Long vehicleId, UpdateInternalVehicleRequest request) {
         adminGuard.requireEnabledAdmin();
-        requireLot(lotId);
+        ParkingLot lot = requireLot(lotId);
         InternalVehicle vehicle = requireVehicle(vehicleId);
         if (!vehicle.getLot().getId().equals(lotId)) {
             throw new BizException(404, MessageKeys.COMMON_NOT_FOUND);
@@ -114,18 +121,21 @@ public class InternalVehicleService {
         vehicle.setDepartment(normalizeOptional(request.department()));
         vehicle.setRemark(normalizeOptional(request.remark()));
         vehicle.setEnabled(enabled);
-        return InternalVehicleView.from(vehicles.save(vehicle));
+        InternalVehicle saved = vehicles.save(vehicle);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_INTERNAL, lot.getCode(), saved);
+        return InternalVehicleView.from(saved);
     }
 
     @Transactional
     public void deleteVehicle(Long lotId, Long vehicleId) {
         adminGuard.requireEnabledAdmin();
-        requireLot(lotId);
+        ParkingLot lot = requireLot(lotId);
         InternalVehicle vehicle = requireVehicle(vehicleId);
         if (!vehicle.getLot().getId().equals(lotId)) {
             throw new BizException(404, MessageKeys.COMMON_NOT_FOUND);
         }
         vehicles.delete(vehicle);
+        notifier.delete(EdgeConfigSyncProtocol.DOMAIN_INTERNAL, lot.getCode(), vehicle.getId());
     }
 
     @Transactional
@@ -137,6 +147,7 @@ public class InternalVehicleService {
         String batchId = UUID.randomUUID().toString();
         int imported = 0;
         int skipped = 0;
+        List<InternalVehicle> created = new ArrayList<>();
         for (String[] cells : rows) {
             String plate = ParkingSpreadsheetSupport.cell(cells, 0);
             String owner = ParkingSpreadsheetSupport.cell(cells, 1);
@@ -166,8 +177,11 @@ public class InternalVehicleService {
             vehicle.setRemark(normalizeOptional(ParkingSpreadsheetSupport.cell(cells, 5)));
             vehicle.setBatchId(batchId);
             vehicle.setEnabled(true);
-            vehicles.save(vehicle);
+            created.add(vehicles.save(vehicle));
             imported++;
+        }
+        if (!created.isEmpty()) {
+            notifier.upserts(EdgeConfigSyncProtocol.DOMAIN_INTERNAL, lot.getCode(), created);
         }
         return new VehicleImportResult(batchId, imported, skipped);
     }
@@ -204,7 +218,7 @@ public class InternalVehicleService {
     @Transactional
     public int deleteVehiclesByBatch(Long lotId, String batchId) {
         adminGuard.requireEnabledAdmin();
-        requireLot(lotId);
+        ParkingLot lot = requireLot(lotId);
         if (!StringUtils.hasText(batchId)) {
             throw new BizException(404, MessageKeys.COMMON_NOT_FOUND);
         }
@@ -212,7 +226,9 @@ public class InternalVehicleService {
         if (batch.isEmpty()) {
             throw new BizException(404, MessageKeys.COMMON_NOT_FOUND);
         }
+        List<Long> deletedIds = batch.stream().map(InternalVehicle::getId).toList();
         vehicles.deleteAll(batch);
+        notifier.deletes(EdgeConfigSyncProtocol.DOMAIN_INTERNAL, lot.getCode(), deletedIds);
         return batch.size();
     }
 

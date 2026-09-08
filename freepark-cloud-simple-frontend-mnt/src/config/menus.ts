@@ -84,6 +84,16 @@ export const classicMenus: MenuItem[] = [
         id: 'parking-sessions',
         titleKey: 'menu.parkingSessions',
         path: '/parking/sessions'
+      },
+      {
+        id: 'discount-vehicles',
+        titleKey: 'menu.discountVehicles',
+        path: '/parking/discount-vehicles'
+      },
+      {
+        id: 'vehicle-fee-query',
+        titleKey: 'menu.vehicleFeeQuery',
+        path: '/parking/fee-query'
       }
     ]
   },
@@ -132,6 +142,11 @@ export const classicMenus: MenuItem[] = [
         id: 'edge-computing',
         titleKey: 'menu.edgeComputing',
         path: '/system/edge-computing'
+      },
+      {
+        id: 'edge-nodes',
+        titleKey: 'menu.edgeNodes',
+        path: '/system/edge-nodes'
       },
       {
         id: 'edge-heartbeat',

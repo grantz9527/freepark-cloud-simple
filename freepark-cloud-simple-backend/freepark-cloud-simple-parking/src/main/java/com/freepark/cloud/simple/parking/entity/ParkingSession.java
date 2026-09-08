@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -20,7 +21,10 @@ import com.freepark.cloud.simple.common.time.SiteZoneTimes;
  * 关联的车场/通道/识别记录均以快照字段回指（平铺存储，无实体关联）。
  */
 @Entity
-@Table(name = "parking_session")
+@Table(name = "parking_session",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_parking_session_edge",
+                columnNames = {"edge_node_code", "edge_session_id"}))
 public class ParkingSession {
 
     @Id
@@ -100,6 +104,17 @@ public class ParkingSession {
 
     /** 支付时间：登记为「已支付」的时刻；仅已支付流水有意义。 */
     private LocalDateTime payTime;
+
+    /**
+     * 来源边缘节点编号：仅边缘节点上报的流水有值，云端自建流水为 null。
+     * 与 edgeSessionId 组成幂等键，用于把边缘重复补推的同一流水收敛为一条记录。
+     */
+    @Column(name = "edge_node_code", length = 64)
+    private String edgeNodeCode;
+
+    /** 边缘本地流水 UUID 文本：边缘上报幂等键之一；仅边缘上报流水有值。 */
+    @Column(name = "edge_session_id", length = 64)
+    private String edgeSessionId;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -290,6 +305,22 @@ public class ParkingSession {
 
     public void setPayTime(LocalDateTime payTime) {
         this.payTime = payTime;
+    }
+
+    public String getEdgeNodeCode() {
+        return edgeNodeCode;
+    }
+
+    public void setEdgeNodeCode(String edgeNodeCode) {
+        this.edgeNodeCode = edgeNodeCode;
+    }
+
+    public String getEdgeSessionId() {
+        return edgeSessionId;
+    }
+
+    public void setEdgeSessionId(String edgeSessionId) {
+        this.edgeSessionId = edgeSessionId;
     }
 
     public LocalDateTime getCreatedAt() {

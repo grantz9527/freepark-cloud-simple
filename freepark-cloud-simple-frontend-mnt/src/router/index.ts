@@ -98,6 +98,18 @@ const router = createRouter({
           meta: { titleKey: 'menu.parkingSessions' }
         },
         {
+          path: 'parking/discount-vehicles',
+          name: 'discount-vehicles',
+          component: () => import('../views/DiscountVehiclesView.vue'),
+          meta: { titleKey: 'menu.discountVehicles' }
+        },
+        {
+          path: 'parking/fee-query',
+          name: 'vehicle-fee-query',
+          component: () => import('../views/FeeQueryView.vue'),
+          meta: { titleKey: 'menu.vehicleFeeQuery' }
+        },
+        {
           path: 'billing/general-rules',
           name: 'billing-general-rules',
           component: () => import('../views/GeneralChargeRulesView.vue'),
@@ -138,6 +150,12 @@ const router = createRouter({
           name: 'edge-computing',
           component: () => import('../views/EdgeComputingView.vue'),
           meta: { titleKey: 'menu.edgeComputing' }
+        },
+        {
+          path: 'system/edge-nodes',
+          name: 'edge-nodes',
+          component: () => import('../views/EdgeNodesView.vue'),
+          meta: { titleKey: 'menu.edgeNodes' }
         },
         {
           path: 'system/edge-heartbeat',

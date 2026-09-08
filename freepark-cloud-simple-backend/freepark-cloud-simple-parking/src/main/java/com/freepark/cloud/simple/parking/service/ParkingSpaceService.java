@@ -14,11 +14,13 @@ import com.freepark.cloud.simple.parking.entity.ParkingArea;
 import com.freepark.cloud.simple.parking.entity.ParkingLocation;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.entity.ParkingSpace;
+import com.freepark.cloud.simple.parking.edge.EdgeDomainChangeNotifier;
 import com.freepark.cloud.simple.parking.repository.ParkingAreaRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingLocationRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingSpaceRepository;
 import com.freepark.cloud.simple.parking.support.ParkingSpreadsheetSupport;
+import com.freepark.cloud.simple.settings.runtime.EdgeConfigSyncProtocol;
 import com.freepark.cloud.simple.user.service.AdminGuard;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
@@ -47,17 +49,20 @@ public class ParkingSpaceService {
     private final ParkingAreaRepository areas;
     private final ParkingSpaceRepository spaces;
     private final AdminGuard adminGuard;
+    private final EdgeDomainChangeNotifier notifier;
 
     public ParkingSpaceService(ParkingLotRepository lots,
                                ParkingLocationRepository locations,
                                ParkingAreaRepository areas,
                                ParkingSpaceRepository spaces,
-                               AdminGuard adminGuard) {
+                               AdminGuard adminGuard,
+                               EdgeDomainChangeNotifier notifier) {
         this.lots = lots;
         this.locations = locations;
         this.areas = areas;
         this.spaces = spaces;
         this.adminGuard = adminGuard;
+        this.notifier = notifier;
     }
 
     @Transactional(readOnly = true)
@@ -79,7 +84,9 @@ public class ParkingSpaceService {
         ParkingLocation location = new ParkingLocation();
         location.setLot(lot);
         location.setName(name);
-        return LocationView.from(locations.save(location));
+        ParkingLocation saved = locations.save(location);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_SPACE, lot.getCode(), saved);
+        return LocationView.from(saved);
     }
 
     @Transactional(readOnly = true)
@@ -102,7 +109,7 @@ public class ParkingSpaceService {
     @Transactional
     public AreaView createArea(Long lotId, CreateAreaRequest request) {
         adminGuard.requireEnabledAdmin();
-        requireLot(lotId);
+        ParkingLot lot = requireLot(lotId);
         Long locationId = request == null ? null : request.locationId();
         if (locationId == null) {
             throw new BizException(400, MessageKeys.COMMON_BAD_REQUEST);
@@ -118,7 +125,9 @@ public class ParkingSpaceService {
         ParkingArea area = new ParkingArea();
         area.setLocation(location);
         area.setName(name);
-        return AreaView.from(areas.save(area));
+        ParkingArea saved = areas.save(area);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_SPACE, lot.getCode(), saved);
+        return AreaView.from(saved);
     }
 
     @Transactional(readOnly = true)
@@ -154,13 +163,15 @@ public class ParkingSpaceService {
         space.setArea(area);
         space.setCode(code);
         space.setEnabled(enabled);
-        return SpaceView.from(spaces.save(space));
+        ParkingSpace saved = spaces.save(space);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_SPACE, lot.getCode(), saved);
+        return SpaceView.from(saved);
     }
 
     @Transactional
     public SpaceView updateSpace(Long lotId, Long spaceId, UpdateSpaceRequest request) {
         adminGuard.requireEnabledAdmin();
-        requireLot(lotId);
+        ParkingLot lot = requireLot(lotId);
         ParkingSpace space = requireSpace(spaceId);
         if (!space.getLot().getId().equals(lotId)) {
             throw new BizException(404, MessageKeys.COMMON_NOT_FOUND);
@@ -178,18 +189,21 @@ public class ParkingSpaceService {
         space.setArea(area);
         space.setCode(code);
         space.setEnabled(enabled);
-        return SpaceView.from(spaces.save(space));
+        ParkingSpace saved = spaces.save(space);
+        notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_SPACE, lot.getCode(), saved);
+        return SpaceView.from(saved);
     }
 
     @Transactional
     public void deleteSpace(Long lotId, Long spaceId) {
         adminGuard.requireEnabledAdmin();
-        requireLot(lotId);
+        ParkingLot lot = requireLot(lotId);
         ParkingSpace space = requireSpace(spaceId);
         if (!space.getLot().getId().equals(lotId)) {
             throw new BizException(404, MessageKeys.COMMON_NOT_FOUND);
         }
         spaces.delete(space);
+        notifier.delete(EdgeConfigSyncProtocol.DOMAIN_SPACE, lot.getCode(), space.getId());
     }
 
     @Transactional(readOnly = true)
@@ -209,6 +223,7 @@ public class ParkingSpaceService {
         List<String[]> rows = ParkingSpreadsheetSupport.readRows(file,
                 ParkingSpreadsheetSupport.SPACE_COLUMN_COUNT);
         int imported = 0;
+        List<ParkingSpace> created = new ArrayList<>();
         for (String[] cells : rows) {
             String code = ParkingSpreadsheetSupport.cell(cells, 0);
             if (code.isEmpty()) {
@@ -222,8 +237,11 @@ public class ParkingSpaceService {
             space.setArea(area);
             space.setCode(code);
             space.setEnabled(true);
-            spaces.save(space);
+            created.add(spaces.save(space));
             imported++;
+        }
+        if (!created.isEmpty()) {
+            notifier.upserts(EdgeConfigSyncProtocol.DOMAIN_SPACE, lot.getCode(), created);
         }
         return imported;
     }

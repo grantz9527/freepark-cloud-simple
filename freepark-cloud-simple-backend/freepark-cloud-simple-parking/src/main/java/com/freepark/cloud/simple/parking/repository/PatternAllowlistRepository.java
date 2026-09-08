@@ -9,6 +9,9 @@ import java.util.List;
 public interface PatternAllowlistRepository
         extends JpaRepository<PatternAllowlist, Long>, JpaSpecificationExecutor<PatternAllowlist> {
 
+    /** 车场下全部号段放行规则（按创建顺序），用于云端全量快照下发 */
+    List<PatternAllowlist> findAllByLotIdOrderByIdAsc(Long lotId);
+
     List<PatternAllowlist> findByLotIdAndEnabledTrue(Long lotId);
 
     boolean existsByLotIdAndNameIgnoreCase(Long lotId, String name);

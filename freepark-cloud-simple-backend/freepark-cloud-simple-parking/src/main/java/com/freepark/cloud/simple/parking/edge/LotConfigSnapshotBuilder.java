@@ -1,9 +1,6 @@
 package com.freepark.cloud.simple.parking.edge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.freepark.cloud.simple.parking.entity.AccessJudgmentRuleType;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
 import com.freepark.cloud.simple.settings.runtime.EdgeConfigSnapshotBuilder;
@@ -11,8 +8,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * 车场自身配置（V1 数据片段）：车场基础信息、通行拦截开关与生效的通行判定顺序。
- * 车场业务模块提供给 settings 边缘配置下发的 SPI 实现，供云端周期下发给对应
- * 边缘服务，边缘侧据此同步本地车场配置。
+ * 车场业务模块提供给 settings 边缘配置下发的 SPI 实现，供云端周期把节点名下各车场
+ * 聚合为 data.lots 下发给对应边缘节点，边缘侧据此同步本地车场配置。
+ * 条目 JSON 形状见 {@link EdgeDomainItems#lot}。
  */
 @Component
 public class LotConfigSnapshotBuilder implements EdgeConfigSnapshotBuilder {
@@ -32,21 +30,7 @@ public class LotConfigSnapshotBuilder implements EdgeConfigSnapshotBuilder {
             return null;
         }
         try {
-            ObjectNode node = objectMapper.createObjectNode();
-            node.put("code", lot.getCode());
-            node.put("name", lot.getName());
-            node.put("lotType", lot.getLotType().name());
-            node.put("enabled", lot.isEnabled());
-            node.put("entryInterceptArrears", lot.isEntryInterceptArrears());
-            node.put("entryInterceptBlacklist", lot.isEntryInterceptBlacklist());
-            node.put("exitInterceptArrears", lot.isExitInterceptArrears());
-            node.put("exitInterceptBlacklist", lot.isExitInterceptBlacklist());
-            ArrayNode judgmentOrder = node.putArray("judgmentOrder");
-            for (AccessJudgmentRuleType rule : lot.effectiveJudgmentOrder()) {
-                judgmentOrder.add(rule.name());
-            }
-            node.put("updatedAt", lot.getUpdatedAt().toString());
-            return objectMapper.writeValueAsString(node);
+            return objectMapper.writeValueAsString(EdgeDomainItems.lot(objectMapper, lot));
         } catch (Exception e) {
             throw new IllegalStateException(
                     "serialize lot config failed: " + e.getMessage(), e);

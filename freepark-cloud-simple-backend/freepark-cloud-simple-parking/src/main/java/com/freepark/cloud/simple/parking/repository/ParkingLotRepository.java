@@ -15,4 +15,7 @@ public interface ParkingLotRepository extends JpaRepository<ParkingLot, Long> {
     List<ParkingLot> findAllByOrderByCreatedAtDesc();
 
     Optional<ParkingLot> findByCode(String code);
+
+    /** 某边缘节点名下全部车场（按车场编码排序，便于稳定同步/展示） */
+    List<ParkingLot> findAllByEdgeNodeCodeOrderByCodeAsc(String edgeNodeCode);
 }

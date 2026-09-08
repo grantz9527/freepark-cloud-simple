@@ -76,7 +76,7 @@ public class EdgeMqttConfig {
 
     /** 配置同步周期（秒）：云端定时下发配置到边缘服务的间隔 */
     @Column(name = "config_sync_interval_seconds", nullable = false)
-    private int configSyncIntervalSeconds = 60;
+    private int configSyncIntervalSeconds = EdgeMqttConfigOptions.DEFAULT_CONFIG_SYNC_INTERVAL_SECONDS;
 
     /** 连接保活间隔（秒） */
     @Column(name = "keep_alive_seconds", nullable = false)

@@ -84,6 +84,9 @@ public final class MessageKeys {
     public static final String EDGE_CONFIG_HEARTBEAT_OFFLINE_INVALID = "edge.config.heartbeatOfflineInvalid";
     public static final String EDGE_CONFIG_TEST_FAILED = "edge.config.testFailed";
 
+    public static final String EDGE_NODE_NAME_TOO_LONG = "edge.node.nameTooLong";
+    public static final String EDGE_NODE_LOT_NOT_FOUND = "edge.node.lotNotFound";
+
     private MessageKeys() {
     }
 }
