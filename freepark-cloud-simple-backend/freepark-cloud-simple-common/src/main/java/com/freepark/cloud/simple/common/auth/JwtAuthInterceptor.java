@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.nio.charset.StandardCharsets;
@@ -24,6 +25,8 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
     /** 无需登录即可访问的路径白名单 */
     private final List<String> excludePaths;
 
+    private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
+
     public JwtAuthInterceptor(JwtUtil jwtUtil,
                               ObjectMapper objectMapper,
                               MessageService messageService,
@@ -38,8 +41,14 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
         String path = request.getRequestURI();
-        if ("OPTIONS".equalsIgnoreCase(request.getMethod()) || excludePaths.contains(path)) {
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
+        }
+        // 白名单支持 Ant 通配符（如 /api/public/**），不能使用精确 equals
+        for (String pattern : excludePaths) {
+            if (PATH_MATCHER.match(pattern, path)) {
+                return true;
+            }
         }
 
         String token = resolveToken(request);

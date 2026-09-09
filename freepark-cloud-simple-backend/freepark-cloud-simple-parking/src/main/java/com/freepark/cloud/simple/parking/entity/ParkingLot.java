@@ -72,6 +72,14 @@ public class ParkingLot {
     @Column(nullable = false)
     private boolean exitInterceptBlacklist = false;
 
+    /**
+     * 欠费统计范围：LOT 仅统计本车场，GLOBAL 跨全部车场统计。
+     * 供边缘节点「算费请求」按车场维度统计欠费金额时使用。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "arrears_scope", nullable = false, length = 16)
+    private LotArrearsScope arrearsScope = LotArrearsScope.LOT;
+
     /** 通行判定规则顺序（逗号分隔的规则类型枚举名），非法时回退默认顺序 */
     @Column(name = "judgment_order", nullable = false, length = 80)
     private String judgmentOrder = DEFAULT_JUDGMENT_ORDER;
@@ -214,6 +222,14 @@ public class ParkingLot {
 
     public void setExitInterceptBlacklist(boolean exitInterceptBlacklist) {
         this.exitInterceptBlacklist = exitInterceptBlacklist;
+    }
+
+    public LotArrearsScope getArrearsScope() {
+        return arrearsScope;
+    }
+
+    public void setArrearsScope(LotArrearsScope arrearsScope) {
+        this.arrearsScope = arrearsScope;
     }
 
     public String getJudgmentOrder() {

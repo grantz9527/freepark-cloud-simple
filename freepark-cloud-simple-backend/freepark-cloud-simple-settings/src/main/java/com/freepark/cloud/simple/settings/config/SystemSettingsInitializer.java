@@ -31,13 +31,16 @@ public class SystemSettingsInitializer implements ApplicationRunner {
         SystemSettings settings = new SystemSettings(
                 SystemSettingsOptions.DEFAULT_LOCALE,
                 SystemSettingsOptions.DEFAULT_TIMEZONE,
+                SystemSettingsOptions.DEFAULT_PLATE_REGION,
                 SystemSettingsOptions.DEFAULT_PLATE_COLOR,
                 SystemSettingsOptions.DEFAULT_ALLOWED_PLATE_COLORS,
                 SystemSettingsOptions.DEFAULT_CURRENCY,
-                SystemSettingsOptions.DEFAULT_ALLOWED_CURRENCIES);
+                SystemSettingsOptions.DEFAULT_ALLOWED_CURRENCIES,
+                SystemSettingsOptions.DEFAULT_ALLOWED_PAYMENT_METHODS);
         settingsRepository.save(settings);
-        log.info("已初始化默认站点配置：locale={}, timezone={}, defaultPlateColor={}, defaultCurrency={}",
-                settings.getDefaultLocale(), settings.getTimezone(), settings.getDefaultPlateColor(),
-                settings.getDefaultCurrency());
+        log.info("已初始化默认站点配置：locale={}, timezone={}, plateRegion={}, defaultPlateColor={}, defaultCurrency={}, paymentMethods={}",
+                settings.getDefaultLocale(), settings.getTimezone(), settings.getPlateRegion(),
+                settings.getDefaultPlateColor(), settings.getDefaultCurrency(),
+                settings.getAllowedPaymentMethods());
     }
 }

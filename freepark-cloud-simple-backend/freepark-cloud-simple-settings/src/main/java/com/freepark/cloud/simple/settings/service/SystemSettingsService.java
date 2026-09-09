@@ -2,6 +2,7 @@ package com.freepark.cloud.simple.settings.service;
 
 import com.freepark.cloud.simple.common.i18n.BizException;
 import com.freepark.cloud.simple.common.i18n.MessageKeys;
+import com.freepark.cloud.simple.settings.dto.PublicSiteSettingsView;
 import com.freepark.cloud.simple.settings.dto.SystemSettingsView;
 import com.freepark.cloud.simple.settings.dto.UpdateSystemSettingsRequest;
 import com.freepark.cloud.simple.settings.entity.SystemSettings;
@@ -43,6 +44,15 @@ public class SystemSettingsService {
     }
 
     /**
+     * C 端（用户端网页）公开读取最小站点配置：仅返回默认车牌版式与默认语言，
+     * 供免登录的查费页据此渲染对应的车牌输入 UI。不需要管理员身份。
+     */
+    @Transactional(readOnly = true)
+    public PublicSiteSettingsView getPublicSettings() {
+        return toPublicView(requireSettings());
+    }
+
+    /**
      * 更新站点配置（仅超级管理员）。
      */
     @Transactional
@@ -54,6 +64,8 @@ public class SystemSettingsService {
                 request == null ? null : request.defaultLocale());
         String timezone = SystemSettingsOptions.validateTimezone(
                 request == null ? null : request.timezone());
+        String plateRegion = SystemSettingsOptions.validatePlateRegion(
+                request == null ? null : request.plateRegion());
         List<String> allowed = SystemSettingsOptions.normalizeAllowed(
                 request == null ? null : request.allowedPlateColors());
         String defaultColor = SystemSettingsOptions.validatePlateColor(
@@ -64,13 +76,17 @@ public class SystemSettingsService {
         String defaultCurrency = SystemSettingsOptions.validateCurrency(
                 request == null ? null : request.defaultCurrency());
         SystemSettingsOptions.ensureDefaultCurrencyAllowed(defaultCurrency, allowedCurrencies);
+        List<String> allowedPaymentMethods = SystemSettingsOptions.normalizeAllowedPaymentMethods(
+                request == null ? null : request.allowedPaymentMethods());
 
         settings.setDefaultLocale(locale);
         settings.setTimezone(timezone);
+        settings.setPlateRegion(plateRegion);
         settings.setDefaultPlateColor(defaultColor);
         settings.setAllowedPlateColors(allowed);
         settings.setDefaultCurrency(defaultCurrency);
         settings.setAllowedCurrencies(allowedCurrencies);
+        settings.setAllowedPaymentMethods(allowedPaymentMethods);
         // saveAndFlush：让 @PreUpdate 在方法内执行并回写 updatedAt，
         // 使响应中的“最近更新”是本轮真实的 UTC 锚点（而非 flush 前的旧值）
         SystemSettingsView view = toView(settingsRepository.saveAndFlush(settings));
@@ -90,6 +106,10 @@ public class SystemSettingsService {
     }
 
     private void ensureDefaults(SystemSettings settings) {
+        if (settings.getPlateRegion() == null || settings.getPlateRegion().isBlank()) {
+            // 历史库在 plate_region 列引入前创建：兜底为默认 CN
+            settings.setPlateRegion(SystemSettingsOptions.DEFAULT_PLATE_REGION);
+        }
         if (settings.getAllowedPlateColors() == null || settings.getAllowedPlateColors().isEmpty()) {
             settings.setAllowedPlateColors(SystemSettingsOptions.DEFAULT_ALLOWED_PLATE_COLORS);
         }
@@ -110,6 +130,10 @@ public class SystemSettingsService {
         if (!settings.getAllowedCurrencies().contains(settings.getDefaultCurrency())) {
             settings.setDefaultCurrency(settings.getAllowedCurrencies().getFirst());
         }
+        if (settings.getAllowedPaymentMethods() == null
+                || settings.getAllowedPaymentMethods().isEmpty()) {
+            settings.setAllowedPaymentMethods(SystemSettingsOptions.DEFAULT_ALLOWED_PAYMENT_METHODS);
+        }
     }
 
     private SystemSettingsView toView(SystemSettings settings) {
@@ -117,15 +141,27 @@ public class SystemSettingsService {
         return new SystemSettingsView(
                 settings.getDefaultLocale(),
                 settings.getTimezone(),
+                settings.getPlateRegion(),
                 settings.getDefaultPlateColor(),
                 List.copyOf(settings.getAllowedPlateColors()),
                 settings.getDefaultCurrency(),
                 List.copyOf(settings.getAllowedCurrencies()),
+                List.copyOf(settings.getAllowedPaymentMethods()),
                 SystemSettingsOptions.SUPPORTED_LOCALES,
                 SystemSettingsOptions.SUPPORTED_TIMEZONES,
+                SystemSettingsOptions.SUPPORTED_PLATE_REGIONS,
                 SystemSettingsOptions.SUPPORTED_PLATE_COLORS,
                 SystemSettingsOptions.SUPPORTED_CURRENCIES,
+                SystemSettingsOptions.SUPPORTED_PAYMENT_METHODS,
                 settings.getUpdatedAt());
+    }
+
+    private PublicSiteSettingsView toPublicView(SystemSettings settings) {
+        ensureDefaults(settings);
+        return new PublicSiteSettingsView(
+                settings.getPlateRegion(),
+                settings.getDefaultLocale(),
+                settings.getDefaultCurrency());
     }
 
     private void requireSuperAdmin() {

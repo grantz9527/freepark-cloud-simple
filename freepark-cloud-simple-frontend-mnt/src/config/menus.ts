@@ -124,6 +124,18 @@ export const classicMenus: MenuItem[] = [
     ]
   },
   {
+    id: 'wechat',
+    titleKey: 'menu.wechat',
+    roles: ['SUPER_ADMIN'],
+    children: [
+      {
+        id: 'wechat-config',
+        titleKey: 'menu.wechatConfig',
+        path: '/wechat/config'
+      }
+    ]
+  },
+  {
     id: 'system',
     titleKey: 'menu.system',
     roles: ['SUPER_ADMIN'],

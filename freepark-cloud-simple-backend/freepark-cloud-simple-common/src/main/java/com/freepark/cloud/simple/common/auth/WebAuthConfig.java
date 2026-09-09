@@ -38,6 +38,10 @@ public class WebAuthConfig implements WebMvcConfigurer {
     private List<String> excludeList() {
         List<String> paths = new ArrayList<>();
         paths.add("/api/user/login");
+        // 边缘节点算费接口：边缘按车牌查询欠费金额，无云端账号体系，需免鉴权开放
+        paths.add("/api/edge/arrears-quote");
+        // C 端公开查询（用户端网页按车牌查费）：免鉴权，仅暴露 /api/public 命名空间
+        paths.add("/api/public/**");
         if (excludePaths != null && !excludePaths.isBlank()) {
             for (String item : excludePaths.split(",")) {
                 String trimmed = item.trim();

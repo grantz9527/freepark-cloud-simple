@@ -1,296 +1,134 @@
+/*
+ * freepark 用户端（C 端网页）全局样式。
+ * 活泼渐变风：柔粉 → 淡蓝紫的清爽底色 + 紫→蓝主渐变 + 粉/橙强调渐变，
+ * 支持浅 / 深色模式（深色下保持霓虹感）。
+ */
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  color-scheme: light;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* 文字 */
+  --fp-ink: #26304a;
+  --fp-ink-soft: #4c5876;
+  --fp-muted: #8490a9;
+  --fp-danger: #e0506b;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
+  /* 背景与卡片 */
+  --fp-bg-top: #fdf0f6;
+  --fp-bg-bottom: #e9efff;
+  --fp-surface: #f4eefb;
+  --fp-surface-elevated: #ffffff;
+  --fp-card: #ffffff;
+  --fp-chip: rgba(255, 255, 255, 0.82);
+  --fp-icon-bg: rgba(255, 255, 255, 0.92);
+  --fp-field: #f3f5fc;
+  --fp-soft: rgba(143, 91, 255, 0.06);
+  --fp-line: rgba(90, 100, 150, 0.16);
+
+  /* 背景光斑 */
+  --fp-pink: #ff9cc4;
+  --fp-sky: #7cc4ff;
+  --fp-mint: #6fe6c3;
+
+  /* 品牌强调色（紫罗兰） */
+  --fp-accent: #7c5cff;
+  --fp-accent-deep: #5737e6;
+
+  /* 渐变体系 */
+  --fp-gradient: linear-gradient(135deg, #8f5bff 0%, #3f8bff 100%);
+  --fp-gradient-accent: linear-gradient(135deg, #ff5f8f 0%, #ff9a4d 100%);
+  --fp-gradient-deep: linear-gradient(150deg, #4b2cf0 0%, #8a4dff 45%, #2fa8ff 100%);
+  --fp-gradient-soft: linear-gradient(135deg, rgba(143, 91, 255, 0.13) 0%, rgba(63, 139, 255, 0.13) 100%);
+
+  /* 光晕 / 阴影 */
+  --fp-glow: rgba(122, 88, 255, 0.32);
+  --fp-glow-accent: rgba(255, 95, 143, 0.38);
+  --fp-glow-deep: rgba(90, 60, 255, 0.4);
+  --fp-shadow-card: 0 10px 30px rgba(70, 84, 150, 0.12);
+  --fp-shadow-soft: 0 8px 24px rgba(70, 84, 150, 0.1);
+
+  /* 兼容旧 token（teal → 主色映射），其它页面/组件继续可用 */
+  --fp-teal: var(--fp-accent);
+  --fp-teal-deep: var(--fp-accent-deep);
+  --fp-teal-soft: var(--fp-gradient-soft);
+
+  --fp-radius: 16px;
+  --fp-radius-sm: 10px;
+
+  --fp-font-body: system-ui, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
+    color-scheme: dark;
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+    --fp-ink: #e8edf8;
+    --fp-ink-soft: #b6c1d6;
+    --fp-muted: #8491ab;
+    --fp-danger: #ff7a92;
+
+    --fp-bg-top: #1d1f38;
+    --fp-bg-bottom: #14182c;
+    --fp-surface: #171b30;
+    --fp-surface-elevated: #232742;
+    --fp-card: rgba(35, 39, 66, 0.92);
+    --fp-chip: rgba(255, 255, 255, 0.07);
+    --fp-icon-bg: rgba(255, 255, 255, 0.08);
+    --fp-field: rgba(255, 255, 255, 0.07);
+    --fp-soft: rgba(164, 140, 255, 0.14);
+    --fp-line: rgba(255, 255, 255, 0.12);
+
+    --fp-pink: #ff7fb0;
+    --fp-sky: #5fb8ff;
+    --fp-mint: #4fdbb3;
+
+    --fp-accent: #a48cff;
+    --fp-accent-deep: #c3b3ff;
+
+    --fp-gradient: linear-gradient(135deg, #9d6bff 0%, #4a96ff 100%);
+    --fp-gradient-accent: linear-gradient(135deg, #ff6f9e 0%, #ffa860 100%);
+    --fp-gradient-deep: linear-gradient(150deg, #5a3aee 0%, #9a5fff 45%, #3fa8ff 100%);
+    --fp-gradient-soft: linear-gradient(135deg, rgba(157, 107, 255, 0.22) 0%, rgba(74, 150, 255, 0.22) 100%);
+
+    --fp-glow: rgba(140, 100, 255, 0.4);
+    --fp-glow-accent: rgba(255, 111, 158, 0.42);
+    --fp-glow-deep: rgba(110, 80, 255, 0.5);
+    --fp-shadow-card: 0 12px 30px rgba(0, 0, 0, 0.35);
+    --fp-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.35);
   }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
 }
 
 body {
   margin: 0;
-}
-
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
+  font-family: var(--fp-font-body);
   font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
-}
-
-.counter {
-  font-size: 16px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  color: var(--accent);
-  background: var(--accent-bg);
-  border: 2px solid transparent;
-  transition: border-color 0.3s;
-  margin-bottom: 24px;
-
-  &:hover {
-    border-color: var(--accent-border);
-  }
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-}
-
-.hero {
-  position: relative;
-
-  .base,
-  .framework,
-  .vite {
-    inset-inline: 0;
-    margin: 0 auto;
-  }
-
-  .base {
-    width: 170px;
-    position: relative;
-    z-index: 0;
-  }
-
-  .framework,
-  .vite {
-    position: absolute;
-  }
-
-  .framework {
-    z-index: 1;
-    top: 34px;
-    height: 28px;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
-      scale(1.4);
-  }
-
-  .vite {
-    z-index: 0;
-    top: 107px;
-    height: 26px;
-    width: auto;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
-      scale(0.8);
-  }
+  line-height: 1.6;
+  color: var(--fp-ink);
+  background: var(--fp-surface);
 }
 
 #app {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
 }
 
-#center {
-  display: flex;
-  flex-direction: column;
-  gap: 25px;
-  place-content: center;
-  place-items: center;
-  flex-grow: 1;
-
-  @media (max-width: 1024px) {
-    padding: 32px 20px 24px;
-    gap: 18px;
-  }
-}
-
-#next-steps {
-  display: flex;
-  border-top: 1px solid var(--border);
-  text-align: left;
-
-  & > div {
-    flex: 1 1 0;
-    padding: 32px;
-    @media (max-width: 1024px) {
-      padding: 24px 20px;
-    }
-  }
-
-  .icon {
-    margin-bottom: 16px;
-    width: 22px;
-    height: 22px;
-  }
-
-  @media (max-width: 1024px) {
-    flex-direction: column;
-    text-align: center;
-  }
-}
-
-#docs {
-  border-right: 1px solid var(--border);
-
-  @media (max-width: 1024px) {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-}
-
-#next-steps ul {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  gap: 8px;
-  margin: 32px 0 0;
-
-  .logo {
-    height: 18px;
-  }
-
-  a {
-    color: var(--text-h);
-    font-size: 16px;
-    border-radius: 6px;
-    background: var(--social-bg);
-    display: flex;
-    padding: 6px 12px;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-    transition: box-shadow 0.3s;
-
-    &:hover {
-      box-shadow: var(--shadow);
-    }
-    .button-icon {
-      height: 18px;
-      width: 18px;
-    }
-  }
-
-  @media (max-width: 1024px) {
-    margin-top: 20px;
-    flex-wrap: wrap;
-    justify-content: center;
-
-    li {
-      flex: 1 1 calc(50% - 8px);
-    }
-
-    a {
-      width: 100%;
-      justify-content: center;
-      box-sizing: border-box;
-    }
-  }
-}
-
-#spacer {
-  height: 88px;
-  border-top: 1px solid var(--border);
-  @media (max-width: 1024px) {
-    height: 48px;
-  }
-}
-
-.ticks {
-  position: relative;
-  width: 100%;
-
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    top: -4.5px;
-    border: 5px solid transparent;
-  }
-
-  &::before {
-    left: 0;
-    border-left-color: var(--border);
-  }
-  &::after {
-    right: 0;
-    border-right-color: var(--border);
-  }
+button,
+input {
+  font: inherit;
 }

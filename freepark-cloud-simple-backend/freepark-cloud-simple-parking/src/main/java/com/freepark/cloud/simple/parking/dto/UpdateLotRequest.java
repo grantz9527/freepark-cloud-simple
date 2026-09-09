@@ -1,5 +1,6 @@
 package com.freepark.cloud.simple.parking.dto;
 
+import com.freepark.cloud.simple.parking.entity.LotArrearsScope;
 import com.freepark.cloud.simple.parking.entity.LotType;
 
 /**
@@ -11,5 +12,6 @@ public record UpdateLotRequest(
         String address,
         Integer totalSpaces,
         Boolean enabled,
-        String mapData) {
+        String mapData,
+        LotArrearsScope arrearsScope) {
 }

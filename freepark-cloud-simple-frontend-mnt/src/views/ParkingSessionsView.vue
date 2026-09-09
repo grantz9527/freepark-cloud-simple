@@ -15,7 +15,7 @@ const d: BiDict = {
   allStatus: { 'zh-CN': '全部状态', en: 'All status' },
   search: { 'zh-CN': '查询', en: 'Search' },
   reset: { 'zh-CN': '重置', en: 'Reset' },
-  manualEntry: { 'zh-CN': '手动入场', en: 'Manual entry' },
+  manualEntry: { 'zh-CN': '手动新增', en: 'Manual add' },
   plate: { 'zh-CN': '车牌', en: 'Plate' },
   plateColor: { 'zh-CN': '车牌颜色', en: 'Plate color' },
   entryTime: { 'zh-CN': '入场时间', en: 'Entry time' },
@@ -23,7 +23,7 @@ const d: BiDict = {
   noLane: { 'zh-CN': '不限通道', en: 'Any lane' },
   exitTime: { 'zh-CN': '出场时间', en: 'Exit time' },
   exitLane: { 'zh-CN': '出场通道', en: 'Exit lane' },
-  closeNow: { 'zh-CN': '同时出场（关场）', en: 'Close session on exit' },
+  closeNow: { 'zh-CN': '同时补录出场信息', en: 'Include exit info' },
   duration: { 'zh-CN': '停车时长', en: 'Duration' },
   fee: { 'zh-CN': '应收金额', en: 'Fee due' },
   payStatus: { 'zh-CN': '支付状态', en: 'Payment status' },
@@ -53,9 +53,11 @@ const d: BiDict = {
   actions: { 'zh-CN': '操作', en: 'Actions' },
   edit: { 'zh-CN': '编辑', en: 'Edit' },
   void: { 'zh-CN': '作废', en: 'Void' },
-  createTitle: { 'zh-CN': '手动入场（新增在场流水）', en: 'Manual entry (open a session)' },
+  createTitle: { 'zh-CN': '手动新增流水', en: 'Manual add session' },
   editTitle: { 'zh-CN': '编辑流水', en: 'Edit session' },
-  createSuccess: { 'zh-CN': '已生成在场流水', en: 'Open session created' },
+  createSuccess: { 'zh-CN': '流水已新增', en: 'Session added' },
+  timeOrderExit: { 'zh-CN': '出场时间必须晚于入场时间', en: 'Exit time must be later than entry time' },
+  exitTimeRequired: { 'zh-CN': '请先填写出场时间', en: 'Please set an exit time first' },
   updateSuccess: { 'zh-CN': '流水已更新', en: 'Session updated' },
   voidTitle: { 'zh-CN': '作废流水', en: 'Void session' },
   voidMsg: { 'zh-CN': '确定作废车牌 {plate} 的这条流水吗？作废后不可恢复。', en: 'Void the session of plate {plate}? This cannot be undone.' },
@@ -588,6 +590,16 @@ async function submitForm() {
   if (!valid) {
     return
   }
+  if (!editing.value && form.enableExit) {
+    if (!form.exitTime) {
+      ElMessage.warning(t('exitTimeRequired'))
+      return
+    }
+    if (form.exitTime <= form.entryTime) {
+      ElMessage.warning(t('timeOrderExit'))
+      return
+    }
+  }
   saving.value = true
   try {
     if (editing.value) {
@@ -607,7 +619,7 @@ async function submitForm() {
       }
       await request.put(`/parking-sessions/${editing.value.id}`, payload)
     } else {
-      await request.post('/parking-sessions', {
+      const payload: Record<string, unknown> = {
         lotId: form.lotId,
         plateNumber: form.plateNumber,
         plateColor: form.plateColor,
@@ -615,7 +627,14 @@ async function submitForm() {
         entryLaneId: form.entryLaneId ?? null,
         entryLaneName: form.entryLaneName || laneNameOf(form.entryLaneId) || null,
         entryImage: null
-      })
+      }
+      if (form.enableExit && form.exitTime) {
+        payload.exitTime = form.exitTime
+        payload.exitLaneId = form.exitLaneId ?? null
+        payload.exitLaneName = form.exitLaneName || laneNameOf(form.exitLaneId) || null
+        payload.exitImage = null
+      }
+      await request.post('/parking-sessions', payload)
     }
     dialogVisible.value = false
     ElMessage.success(editing.value ? t('updateSuccess') : t('createSuccess'))
@@ -887,25 +906,23 @@ onMounted(async () => {
           </el-select>
         </el-form-item>
 
-        <template v-if="editing">
-          <el-form-item v-if="isOpenSession">
-            <el-checkbox v-model="form.enableExit">{{ t('closeNow') }}</el-checkbox>
+        <el-form-item v-if="!editing || isOpenSession">
+          <el-checkbox v-model="form.enableExit">{{ t('closeNow') }}</el-checkbox>
+        </el-form-item>
+        <template v-if="form.enableExit || (editing && !isOpenSession)">
+          <el-form-item :label="t('exitTime')">
+            <el-date-picker
+              v-model="form.exitTime"
+              type="datetime"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+              style="width: 100%"
+            />
           </el-form-item>
-          <template v-if="!isOpenSession || form.enableExit">
-            <el-form-item :label="t('exitTime')">
-              <el-date-picker
-                v-model="form.exitTime"
-                type="datetime"
-                value-format="YYYY-MM-DDTHH:mm:ss"
-                style="width: 100%"
-              />
-            </el-form-item>
-            <el-form-item :label="t('exitLane')">
-              <el-select v-model="form.exitLaneId" clearable :placeholder="t('noLane')" style="width: 100%">
-                <el-option v-for="item in lanes" :key="item.id" :label="item.name" :value="item.id" />
-              </el-select>
-            </el-form-item>
-          </template>
+          <el-form-item :label="t('exitLane')">
+            <el-select v-model="form.exitLaneId" clearable :placeholder="t('noLane')" style="width: 100%">
+              <el-option v-for="item in lanes" :key="item.id" :label="item.name" :value="item.id" />
+            </el-select>
+          </el-form-item>
         </template>
       </el-form>
 

@@ -21,6 +21,7 @@ import com.freepark.cloud.simple.common.i18n.MessageKeys;
 import com.freepark.cloud.simple.common.time.SiteZoneProvider;
 import com.freepark.cloud.simple.common.time.SiteZoneTimes;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -97,7 +98,7 @@ public class BillingSimulateService {
     }
 
     /** 每日制规则模拟算费。 */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public BillingSimulateResult simulateDaily(Long ruleId, BillingSimulateRequest request) {
         BillingDailyRule rule = dailyRules.findById(ruleId)
                 .orElseThrow(() -> new BizException(404, MessageKeys.COMMON_NOT_FOUND));
@@ -125,7 +126,7 @@ public class BillingSimulateService {
     }
 
     /** 24 小时制规则模拟算费。 */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public BillingSimulateResult simulateGeneral(Long ruleId, BillingSimulateRequest request) {
         BillingGeneralRule rule = generalRules.findById(ruleId)
                 .orElseThrow(() -> new BizException(404, MessageKeys.COMMON_NOT_FOUND));

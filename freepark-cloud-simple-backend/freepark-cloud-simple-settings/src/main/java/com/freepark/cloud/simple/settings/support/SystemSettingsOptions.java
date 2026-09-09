@@ -25,6 +25,15 @@ public final class SystemSettingsOptions {
     /** 默认时区 */
     public static final String DEFAULT_TIMEZONE = "Asia/Shanghai";
 
+    /**
+     * 站点默认车牌版式（国家/地区）：决定 C 端（用户端网页）默认采用的车牌输入 UI。
+     * 各取值与用户端前端 plateRegion.ts 中的版式预设一一对应（CN 之外均含本地版式分段 + 自由输入回退）。
+     */
+    public static final String DEFAULT_PLATE_REGION = "CN";
+
+    public static final List<String> SUPPORTED_PLATE_REGIONS = List.of(
+            "CN", "HK", "MO", "TW", "EU", "GB", "US", "JP", "KR", "SG");
+
     /** 支持选择的时区（与 local_server SupportedTimezone 一致） */
     public static final List<String> SUPPORTED_TIMEZONES = List.of(
             "UTC",
@@ -78,6 +87,14 @@ public final class SystemSettingsOptions {
     public static final String DEFAULT_CURRENCY = "CNY";
 
     /**
+     * 收费方式：站点支持的缴费/收款渠道预置列表，勾选启用。
+     */
+    public static final List<String> SUPPORTED_PAYMENT_METHODS = List.of("WECHAT_PAY");
+
+    /** 默认启用的收费方式 */
+    public static final List<String> DEFAULT_ALLOWED_PAYMENT_METHODS = List.of("WECHAT_PAY");
+
+    /**
      * 将配置的时区字符串解析为 {@link ZoneId}；非法或缺失时回退到默认时区。
      */
     public static ZoneId zoneIdOrDefault(String value) {
@@ -107,6 +124,14 @@ public final class SystemSettingsOptions {
         return zone;
     }
 
+    public static String validatePlateRegion(String value) {
+        String region = normalize(value);
+        if (!SUPPORTED_PLATE_REGIONS.contains(region)) {
+            throw new BizException(400, MessageKeys.COMMON_BAD_REQUEST);
+        }
+        return region;
+    }
+
     public static String validatePlateColor(String value) {
         String color = normalize(value);
         if (!SUPPORTED_PLATE_COLORS.contains(color)) {
@@ -121,6 +146,34 @@ public final class SystemSettingsOptions {
             throw new BizException(400, MessageKeys.SETTINGS_INVALID_CURRENCY);
         }
         return currency;
+    }
+
+    public static String validatePaymentMethod(String value) {
+        String method = normalize(value);
+        if (!SUPPORTED_PAYMENT_METHODS.contains(method)) {
+            throw new BizException(400, MessageKeys.SETTINGS_INVALID_PAYMENT_METHOD);
+        }
+        return method;
+    }
+
+    /**
+     * 去重并校验允许收费方式列表，至少需要一种。
+     */
+    public static List<String> normalizeAllowedPaymentMethods(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            throw new BizException(400, MessageKeys.SETTINGS_EMPTY_PAYMENT_METHODS);
+        }
+        List<String> result = new ArrayList<>();
+        for (String value : values) {
+            String method = validatePaymentMethod(value);
+            if (!result.contains(method)) {
+                result.add(method);
+            }
+        }
+        if (result.isEmpty()) {
+            throw new BizException(400, MessageKeys.SETTINGS_EMPTY_PAYMENT_METHODS);
+        }
+        return result;
     }
 
     /**

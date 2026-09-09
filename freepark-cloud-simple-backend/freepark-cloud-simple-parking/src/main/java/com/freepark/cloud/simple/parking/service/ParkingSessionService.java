@@ -8,9 +8,12 @@ import com.freepark.cloud.simple.common.time.SiteZoneTimes;
 import com.freepark.cloud.simple.common.web.PageResult;
 import com.freepark.cloud.simple.parking.dto.CreateParkingSessionRequest;
 import com.freepark.cloud.simple.parking.dto.ParkingSessionView;
+import com.freepark.cloud.simple.parking.dto.PlateFeeItemView;
+import com.freepark.cloud.simple.parking.dto.PlateFeeQuoteView;
 import com.freepark.cloud.simple.parking.dto.UpdateParkingSessionRequest;
 import com.freepark.cloud.simple.parking.dto.VehicleArrearsResult;
 import com.freepark.cloud.simple.parking.entity.DiscountVehicle;
+import com.freepark.cloud.simple.parking.entity.LotArrearsScope;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.entity.ParkingPayStatus;
 import com.freepark.cloud.simple.parking.entity.ParkingSession;
@@ -33,16 +36,21 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 /**
- * 停车流水服务：列表筛选、has-open 查询、手动新增（入场）、编辑（可修正入场/自动关场）、作废。
- * 同一车场同一车牌仅保留一条在场流水，重复入场时旧在场流水自动作废。
+ * 停车流水服务：列表筛选、has-open 查询、手动新增（入场/整条补录）、编辑（可修正入场/自动关场）、作废。
+ * 同一车场同一车牌仅保留一条在场流水；手动补录只写入本条记录，不自动作废其它流水。
  */
 @Service
 public class ParkingSessionService {
@@ -121,6 +129,159 @@ public class ParkingSessionService {
     }
 
     /**
+     * 算费请求（供边缘节点调用）：返回指定车牌当前的欠费金额（元）。
+     * <ul>
+     *   <li>请求带 {@code lotCode} 时按该车场的「欠费统计范围」统计：
+     *       范围 LOT 只统计本车场的欠费，范围 GLOBAL 则跨全部车场统计；车场不存在返回 0（不拦截）；</li>
+     *   <li>未带 {@code lotCode} 时按全部车场统计（兼容直接测试/无法定位车场的调用）；</li>
+     *   <li>欠费口径：已出场（CLOSED）应收快照 &gt; 0 且未付清（未支付/部分支付/未登记）合计，
+     *       加在场（OPEN）流水按「入场 ~ 当前时刻」的估算应收（命中优惠车辆时应用每次入场免费时长）。</li>
+     * </ul>
+     * 统计不修改任何快照，仅返回当前应收合计。
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal quoteArrearsAmount(String lotCode, String plateNumber) {
+        String plate = plateNumber == null ? null : plateNumber.trim().toUpperCase();
+        if (!StringUtils.hasText(plate)) {
+            throw new BizException(400, MessageKeys.COMMON_BAD_REQUEST);
+        }
+        Long lotId = null;
+        if (StringUtils.hasText(lotCode)) {
+            ParkingLot lot = lots.findByCode(lotCode.trim()).orElse(null);
+            if (lot == null) {
+                return BigDecimal.ZERO;
+            }
+            lotId = lot.getArrearsScope() == LotArrearsScope.LOT ? lot.getId() : null;
+        }
+        BigDecimal total = BigDecimal.ZERO;
+        for (ParkingSession session : sessions.findAll(buildVehicleLatestSpec(lotId, plate))) {
+            if (session.getStatus() == ParkingSessionStatus.OPEN) {
+                BigDecimal estimated = computeFee(session);
+                if (estimated != null && estimated.signum() > 0) {
+                    total = total.add(estimated);
+                }
+            } else if (session.getStatus() == ParkingSessionStatus.CLOSED) {
+                if (session.getPayStatus() == ParkingPayStatus.PAID) {
+                    continue;
+                }
+                BigDecimal fee = session.getFeeYuan();
+                if (fee != null && fee.signum() > 0) {
+                    total = total.add(fee);
+                }
+            }
+        }
+        return total;
+    }
+
+    /**
+     * C 端公开查费：返回指定车牌当前费用信息（全部车场口径），供用户端网页查询。
+     * <ul>
+     *   <li>在场（OPEN）流水全部返回：金额为按入场至今的估算应收（免费/未计费为 0，用于展示“免费停放中”）；</li>
+     *   <li>已出场（CLOSED）仅返回未付清且应收快照 &gt; 0 的记录（历史欠费）；已支付与 0 元单不展示；</li>
+     *   <li>可选 {@code plateColor}：同一车牌可能存在不同颜色的记录（识别误差/换车），
+     *       传值后仅统计该颜色的流水（未记录颜色的历史流水一并忽略），避免金额混淆；</li>
+     *   <li>返回 {@code colors}：该车牌实际存在的颜色清单，便于前端提示可切换的颜色；</li>
+     *   <li>{@code totalAmount} 合计口径与 {@link #quoteArrearsAmount(String, String)} 一致。</li>
+     * </ul>
+     * 只读查询，不修改任何快照。
+     */
+    @Transactional(readOnly = true)
+    public PlateFeeQuoteView queryPublicPlateFee(String plateNumber, PlateColor plateColor) {
+        String plate = plateNumber == null ? null : plateNumber.trim().toUpperCase();
+        if (!StringUtils.hasText(plate)) {
+            throw new BizException(400, MessageKeys.COMMON_BAD_REQUEST);
+        }
+        List<ParkingSession> matched = sessions.findAll(buildVehicleLatestSpec(null, plate));
+        // 该车牌存在的颜色集合（无论当前是否按颜色过滤，均用于前端提示可切换的颜色）
+        Set<PlateColor> colors = EnumSet.noneOf(PlateColor.class);
+        for (ParkingSession session : matched) {
+            if (session.getPlateColor() != null) {
+                colors.add(session.getPlateColor());
+            }
+        }
+
+        List<PlateFeeItemView> items = new ArrayList<>();
+        BigDecimal total = BigDecimal.ZERO;
+        LocalDateTime now = SiteZoneTimes.nowUtc();
+        for (ParkingSession session : matched) {
+            if (plateColor != null && session.getPlateColor() != plateColor) {
+                // 指定了颜色：只统计该颜色流水（历史未记颜色的流水无法确认，一并排除）
+                continue;
+            }
+            if (session.getStatus() == ParkingSessionStatus.OPEN) {
+                BigDecimal estimated = computeFee(session);
+                BigDecimal amount = estimated == null ? BigDecimal.ZERO : estimated;
+                if (amount.signum() > 0) {
+                    total = total.add(amount);
+                }
+                items.add(toPlateFeeItem(session, true, amount, now));
+            } else if (session.getStatus() == ParkingSessionStatus.CLOSED) {
+                if (session.getPayStatus() == ParkingPayStatus.PAID) {
+                    continue;
+                }
+                BigDecimal fee = session.getFeeYuan();
+                if (fee == null || fee.signum() <= 0) {
+                    continue;
+                }
+                total = total.add(fee);
+                items.add(toPlateFeeItem(session, false, fee, now));
+            }
+        }
+        items.sort(Comparator.comparing(PlateFeeItemView::entryText).reversed());
+
+        List<String> colorNames = new ArrayList<>();
+        for (PlateColor value : PlateColor.values()) {
+            if (colors.contains(value)) {
+                colorNames.add(value.name());
+            }
+        }
+        return new PlateFeeQuoteView(plate, items, total, colorNames);
+    }
+
+    private static final DateTimeFormatter FEE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+    private static PlateFeeItemView toPlateFeeItem(ParkingSession session, boolean ongoing,
+                                                   BigDecimal amount, LocalDateTime now) {
+        LocalDateTime end = ongoing ? now : session.getExitTime();
+        String durationText = "";
+        if (session.getEntryTime() != null && end != null && end.isAfter(session.getEntryTime())) {
+            durationText = formatDuration(Duration.between(session.getEntryTime(), end));
+        }
+        return new PlateFeeItemView(
+                ongoing ? "ONGOING" : "SETTLED",
+                session.getLotName(),
+                session.getPlateColor() == null ? null : session.getPlateColor().name(),
+                session.getEntryTime() == null ? "" : FEE_TIME_FORMATTER.format(session.getEntryTime()),
+                ongoing || session.getExitTime() == null
+                        ? null
+                        : FEE_TIME_FORMATTER.format(session.getExitTime()),
+                durationText,
+                amount);
+    }
+
+    private static String formatDuration(Duration duration) {
+        long minutes = Math.max(0, duration.toMinutes());
+        long days = minutes / 1440;
+        minutes %= 1440;
+        long hours = minutes / 60;
+        minutes %= 60;
+        if (days > 0) {
+            return days + "天" + hours + "小时";
+        }
+        if (hours > 0 && minutes > 0) {
+            return hours + "小时" + minutes + "分";
+        }
+        if (hours > 0) {
+            return hours + "小时";
+        }
+        if (minutes > 0) {
+            return minutes + "分钟";
+        }
+        return "不足1分钟";
+    }
+
+    /**
      * 车费查询辅助：刷新车牌（+可选车场）最近一笔停车流水的费用。
      * 在场（OPEN）按「入场 ~ 当前时刻」估算；已出场（CLOSED）按真实出场时间重算；
      * 均快照应收金额，保证查询时展示的是按当前计费配置（含优惠车辆免费时长）的最新结果。
@@ -194,7 +355,12 @@ public class ParkingSessionService {
                 lotId, plateNumber.trim(), ParkingSessionStatus.OPEN);
     }
 
-    /** 手动新增在场流水（入场）。重复在场流水自动作废，保证一辆车仅一条在场流水。 */
+    /**
+     * 手动新增流水：不填出场信息时新增一条在场（OPEN）流水（入场）；
+     * 填了出场信息则直接生成一条已出场（CLOSED）的完整流水，并按真实出入场结算应收。
+     * 手动补录只写入本条记录：不自动作废、也不因同车场同车牌的在场流水而拦截整条补录；
+     * 仅当要再补一条「入场」而该车已有在场流水时提示（避免同车场同车牌出现两条在场）。
+     */
     @Transactional
     public ParkingSessionView createSession(CreateParkingSessionRequest request) {
         adminGuard.requireEnabledAdmin();
@@ -203,7 +369,18 @@ public class ParkingSessionService {
         }
         ParkingLot lot = requireLot(request.lotId());
         String plateNumber = requirePlate(request.plateNumber());
-        voidOpenSessions(lot.getId(), plateNumber);
+        LocalDateTime entryTime = request.entryTime() == null
+                ? SiteZoneTimes.nowUtc()
+                : request.entryTime();
+        LocalDateTime exitTime = request.exitTime();
+        if (exitTime != null && !exitTime.isAfter(entryTime)) {
+            throw new BizException(400, MessageKeys.COMMON_BAD_REQUEST);
+        }
+        if (exitTime == null
+                && sessions.existsByLotIdAndPlateNumberIgnoreCaseAndStatus(
+                lot.getId(), plateNumber, ParkingSessionStatus.OPEN)) {
+            throw new BizException(400, MessageKeys.PARKING_SESSION_OPEN_ALREADY_EXISTS);
+        }
 
         ParkingSession session = new ParkingSession();
         session.setLotId(lot.getId());
@@ -211,10 +388,16 @@ public class ParkingSessionService {
         session.setPlateNumber(plateNumber);
         session.setPlateColor(request.plateColor() == null ? PlateColor.BLUE : request.plateColor());
         session.setStatus(ParkingSessionStatus.OPEN);
-        session.setEntryTime(request.entryTime() == null ? SiteZoneTimes.nowUtc() : request.entryTime());
+        session.setEntryTime(entryTime);
         session.setEntryLaneId(request.entryLaneId());
         session.setEntryLaneName(normalizeOptional(request.entryLaneName()));
         session.setEntryImage(normalizeOptional(request.entryImage()));
+        if (exitTime != null) {
+            session.closeWithExit(exitTime,
+                    request.exitLaneId(), normalizeOptional(request.exitLaneName()),
+                    null, normalizeOptional(request.exitImage()));
+            refreshFee(session);
+        }
         return ParkingSessionView.from(sessions.save(session));
     }
 
@@ -392,17 +575,6 @@ public class ParkingSessionService {
             return;
         }
         session.setFeeYuan(computeFee(session));
-    }
-
-    /** 入场前将同车场同车牌残留的在场流水作废，保证一辆车仅保留一条新在场流水。 */
-    private void voidOpenSessions(Long lotId, String plateNumber) {
-        List<ParkingSession> openSessions = sessions
-                .findAllByLotIdAndPlateNumberIgnoreCaseAndStatus(
-                        lotId, plateNumber, ParkingSessionStatus.OPEN);
-        for (ParkingSession open : openSessions) {
-            open.markVoided();
-            sessions.save(open);
-        }
     }
 
     private Specification<ParkingSession> buildSpec(Long lotId, String keyword,

@@ -7,6 +7,7 @@ import { useBiText, type BiDict } from '../utils/biText'
 
 type LotTypeOption = 'INTERNAL' | 'PUBLIC'
 type RuleTypeValue = 'DAILY' | 'GENERAL'
+type ArrearsScopeOption = 'LOT' | 'GLOBAL'
 
 interface LotView {
   id: number
@@ -17,6 +18,7 @@ interface LotView {
   totalSpaces: number
   enabled: boolean
   mapData: string | null
+  arrearsScope: ArrearsScopeOption
   createdAt: string
   updatedAt: string
 }
@@ -27,6 +29,7 @@ interface LotPayload {
   address?: string
   totalSpaces?: number
   enabled?: boolean
+  arrearsScope?: ArrearsScopeOption
 }
 
 /** 车场计费配置（规则模板 × 车场 × 车牌颜色 × 生效区间） */
@@ -54,6 +57,7 @@ interface SettingsView {
 }
 
 const LOT_TYPE_OPTIONS: LotTypeOption[] = ['INTERNAL', 'PUBLIC']
+const ARREARS_SCOPE_OPTIONS: ArrearsScopeOption[] = ['LOT', 'GLOBAL']
 
 const d: BiDict = {
   title: { 'zh-CN': '停车场管理', en: 'Parking Lots' },
@@ -141,6 +145,13 @@ const d: BiDict = {
   address: { 'zh-CN': '地址', en: 'Address' },
   totalSpaces: { 'zh-CN': '车位总数', en: 'Total Spaces' },
   enabled: { 'zh-CN': '启用', en: 'Enabled' },
+  arrearsScope: { 'zh-CN': '欠费统计范围', en: 'Arrears Scope' },
+  arrearsScopeLot: { 'zh-CN': '仅本车场', en: 'This lot only' },
+  arrearsScopeGlobal: { 'zh-CN': '全部车场', en: 'All lots' },
+  arrearsScopeHint: {
+    'zh-CN': '决定边缘节点按该车场发起「算费请求」时统计哪些停车欠费：仅本车场时其他车场的欠费不计入拦截金额；全部车场时任一车场未结清的欠费都会计入拦截。',
+    en: 'Controls which arrears are counted when the edge node quotes fees for this lot: This lot only ignores debts from other lots; All lots counts any unpaid parking debt across lots.'
+  },
   cancel: { 'zh-CN': '取消', en: 'Cancel' },
   save: { 'zh-CN': '保存', en: 'Save' },
   saving: { 'zh-CN': '保存中…', en: 'Saving…' },
@@ -238,6 +249,10 @@ function lotTypeLabel(type: LotTypeOption): string {
   return type === 'PUBLIC' ? t('lotTypePublic') : t('lotTypeInternal')
 }
 
+function arrearsScopeLabel(scope: ArrearsScopeOption): string {
+  return scope === 'GLOBAL' ? t('arrearsScopeGlobal') : t('arrearsScopeLot')
+}
+
 function statusLabel(enabled: boolean): string {
   return enabled ? t('statusEnabled') : t('statusDisabled')
 }
@@ -280,6 +295,7 @@ function openEdit(row: LotView): void {
   form.address = row.address ?? ''
   form.totalSpaces = row.totalSpaces
   form.enabled = row.enabled
+  form.arrearsScope = row.arrearsScope || 'LOT'
   dialogVisible.value = true
 }
 
@@ -291,6 +307,7 @@ function openCreate(): void {
   form.address = ''
   form.totalSpaces = 0
   form.enabled = true
+  form.arrearsScope = 'LOT'
   dialogVisible.value = true
 }
 
@@ -314,7 +331,8 @@ const form = reactive({
   lotType: 'INTERNAL' as LotTypeOption,
   address: '',
   totalSpaces: 0,
-  enabled: true
+  enabled: true,
+  arrearsScope: 'LOT' as ArrearsScopeOption
 })
 
 const formRules = computed<FormRules>(() => ({
@@ -339,7 +357,8 @@ function buildPayload(): LotPayload | null {
     lotType: form.lotType,
     address: form.address.trim() || undefined,
     totalSpaces: form.totalSpaces,
-    enabled: form.enabled
+    enabled: form.enabled,
+    arrearsScope: form.arrearsScope
   }
 }
 
@@ -715,6 +734,17 @@ onMounted(loadList)
         </el-form-item>
         <el-form-item :label="t('enabled')" prop="enabled">
           <el-switch v-model="form.enabled" />
+        </el-form-item>
+        <el-form-item :label="t('arrearsScope')" prop="arrearsScope">
+          <el-select v-model="form.arrearsScope" style="width: 100%">
+            <el-option
+              v-for="option in ARREARS_SCOPE_OPTIONS"
+              :key="option"
+              :label="arrearsScopeLabel(option)"
+              :value="option"
+            />
+          </el-select>
+          <div class="form-hint">{{ t('arrearsScopeHint') }}</div>
         </el-form-item>
       </el-form>
       <template #footer>

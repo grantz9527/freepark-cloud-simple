@@ -1,5 +1,6 @@
 package com.freepark.cloud.simple.parking.dto;
 
+import com.freepark.cloud.simple.parking.entity.LotArrearsScope;
 import com.freepark.cloud.simple.parking.entity.LotType;
 
 /**
@@ -11,5 +12,6 @@ public record CreateLotRequest(
         LotType lotType,
         String address,
         Integer totalSpaces,
-        Boolean enabled) {
+        Boolean enabled,
+        LotArrearsScope arrearsScope) {
 }

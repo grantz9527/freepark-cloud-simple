@@ -64,6 +64,8 @@ export default {
     dailyBillingRules: 'Daily Billing Rules',
     dateManagement: 'Date Management',
     billingCycleProfiles: 'Billing Cycles',
+    wechat: 'WeChat',
+    wechatConfig: 'WeChat Config',
     system: 'System',
     systemAdmins: 'Administrators',
     systemSettings: 'System Settings',

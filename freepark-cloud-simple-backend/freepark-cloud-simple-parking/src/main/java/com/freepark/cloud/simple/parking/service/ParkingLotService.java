@@ -10,6 +10,7 @@ import com.freepark.cloud.simple.parking.dto.UpdateAccessJudgmentRequest;
 import com.freepark.cloud.simple.parking.dto.UpdateLotInterceptRequest;
 import com.freepark.cloud.simple.parking.dto.UpdateLotRequest;
 import com.freepark.cloud.simple.parking.entity.InterceptRuleType;
+import com.freepark.cloud.simple.parking.entity.LotArrearsScope;
 import com.freepark.cloud.simple.parking.entity.LotType;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.edge.EdgeDomainChangeNotifier;
@@ -67,6 +68,7 @@ public class ParkingLotService {
         lot.setAddress(address);
         lot.setTotalSpaces(totalSpaces);
         lot.setEnabled(enabled);
+        lot.setArrearsScope(scopeOrDefault(request.arrearsScope()));
         ParkingLot saved = lots.save(lot);
         notifier.upsert(EdgeConfigSyncProtocol.DOMAIN_LOT, saved.getCode(), saved);
         return LotView.from(saved);
@@ -86,6 +88,9 @@ public class ParkingLotService {
         lot.setAddress(address);
         lot.setTotalSpaces(totalSpaces);
         lot.setEnabled(enabled);
+        if (request.arrearsScope() != null) {
+            lot.setArrearsScope(request.arrearsScope());
+        }
         if (request.mapData() != null) {
             lot.setMapData(request.mapData());
         }
@@ -156,5 +161,9 @@ public class ParkingLotService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private LotArrearsScope scopeOrDefault(LotArrearsScope scope) {
+        return scope == null ? LotArrearsScope.LOT : scope;
     }
 }

@@ -21,8 +21,9 @@ import java.util.List;
 /**
  * 全局站点配置（单例，参考 freepark local_server 的 SiteSettings）。
  *
- * <p>目前仅承载“区域与语言”（默认语言/时区）、“车牌颜色”（默认颜色/允许颜色）与
- * “收费金额单位”（默认币种/允许币种），其余参考配置项暂未接入。</p>
+ * <p>目前承载“区域与语言”（默认语言/时区）、“车牌颜色”（默认颜色/允许颜色）、
+ * “收费金额单位”（默认币种/允许币种）与“收费方式”（允许的缴费渠道），
+ * 其余参考配置项暂未接入。</p>
  */
 @Entity
 @Table(name = "system_settings")
@@ -42,6 +43,10 @@ public class SystemSettings {
     /** 默认时区（IANA 时区，如 Asia/Shanghai） */
     @Column(nullable = false, length = 64)
     private String timezone;
+
+    /** 站点默认车牌版式（区域），历史记录缺失时按 CN 兜底 */
+    @Column(name = "plate_region", nullable = true, length = 16)
+    private String plateRegion;
 
     /** 默认车牌颜色（PlateColor 名称，与 parking 模块枚举保持一致） */
     @Column(name = "default_plate_color", nullable = false, length = 32)
@@ -69,21 +74,33 @@ public class SystemSettings {
     @OrderColumn(name = "sort_order")
     private List<String> allowedCurrencies = new ArrayList<>();
 
+    /** 允许使用的收费方式集合（有序，自预置方式列表勾选启用） */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "system_settings_allowed_payment_method",
+            joinColumns = @JoinColumn(name = "settings_id"))
+    @Column(name = "payment_method", nullable = false, length = 32)
+    @OrderColumn(name = "sort_order")
+    private List<String> allowedPaymentMethods = new ArrayList<>();
+
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
     protected SystemSettings() {
     }
 
-    public SystemSettings(String defaultLocale, String timezone, String defaultPlateColor,
-                          List<String> allowedPlateColors, String defaultCurrency,
-                          List<String> allowedCurrencies) {
+    public SystemSettings(String defaultLocale, String timezone, String plateRegion,
+                          String defaultPlateColor, List<String> allowedPlateColors,
+                          String defaultCurrency, List<String> allowedCurrencies,
+                          List<String> allowedPaymentMethods) {
         this.defaultLocale = defaultLocale;
         this.timezone = timezone;
+        this.plateRegion = plateRegion;
         this.defaultPlateColor = defaultPlateColor;
         this.allowedPlateColors = new ArrayList<>(allowedPlateColors);
         this.defaultCurrency = defaultCurrency;
         this.allowedCurrencies = new ArrayList<>(allowedCurrencies);
+        this.allowedPaymentMethods = new ArrayList<>(allowedPaymentMethods);
     }
 
     @PrePersist
@@ -106,6 +123,14 @@ public class SystemSettings {
 
     public void setDefaultLocale(String defaultLocale) {
         this.defaultLocale = defaultLocale;
+    }
+
+    public String getPlateRegion() {
+        return plateRegion;
+    }
+
+    public void setPlateRegion(String plateRegion) {
+        this.plateRegion = plateRegion;
     }
 
     public String getTimezone() {
@@ -146,6 +171,14 @@ public class SystemSettings {
 
     public void setAllowedCurrencies(List<String> allowedCurrencies) {
         this.allowedCurrencies = new ArrayList<>(allowedCurrencies);
+    }
+
+    public List<String> getAllowedPaymentMethods() {
+        return allowedPaymentMethods;
+    }
+
+    public void setAllowedPaymentMethods(List<String> allowedPaymentMethods) {
+        this.allowedPaymentMethods = new ArrayList<>(allowedPaymentMethods);
     }
 
     public LocalDateTime getUpdatedAt() {

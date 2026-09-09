@@ -41,6 +41,7 @@ public final class MessageKeys {
     public static final String PARKING_PATTERN_ALLOWLIST_NAME_EXISTS = "parking.patternAllowlist.nameExists";
     public static final String PARKING_PATTERN_ALLOWLIST_PATTERN_EXISTS = "parking.patternAllowlist.patternExists";
     public static final String PARKING_PATTERN_ALLOWLIST_INVALID_PATTERN = "parking.patternAllowlist.invalidPattern";
+    public static final String PARKING_SESSION_OPEN_ALREADY_EXISTS = "parking.session.openAlreadyExists";
 
     public static final String BILLING_DATE_INVALID_TYPE = "billing.date.invalidType";
     public static final String BILLING_DATE_INVALID_RANGE = "billing.date.invalidRange";
@@ -69,6 +70,27 @@ public final class MessageKeys {
     public static final String SETTINGS_INVALID_CURRENCY = "settings.invalidCurrency";
     public static final String SETTINGS_EMPTY_CURRENCIES = "settings.emptyCurrencies";
     public static final String SETTINGS_DEFAULT_CURRENCY_NOT_ALLOWED = "settings.defaultCurrencyNotAllowed";
+    public static final String SETTINGS_INVALID_PAYMENT_METHOD = "settings.invalidPaymentMethod";
+    public static final String SETTINGS_EMPTY_PAYMENT_METHODS = "settings.emptyPaymentMethods";
+
+    public static final String WECHAT_MCH_ID_REQUIRED = "wechat.mchId.required";
+    public static final String WECHAT_MCH_ID_INVALID = "wechat.mchId.invalid";
+    public static final String WECHAT_MCH_API_KEY_REQUIRED = "wechat.mchApiKey.required";
+    public static final String WECHAT_MCH_API_KEY_INVALID = "wechat.mchApiKey.invalid";
+    public static final String WECHAT_APP_ID_REQUIRED = "wechat.appId.required";
+    public static final String WECHAT_APP_ID_INVALID = "wechat.appId.invalid";
+    public static final String WECHAT_APP_SECRET_REQUIRED = "wechat.appSecret.required";
+    public static final String WECHAT_APP_SECRET_INVALID = "wechat.appSecret.invalid";
+    public static final String WECHAT_CERT_SERIAL_INVALID = "wechat.certSerialNo.invalid";
+    public static final String WECHAT_CERT_PEM_INVALID = "wechat.certPem.invalid";
+    public static final String WECHAT_PUBLIC_KEY_INVALID = "wechat.publicKey.invalid";
+    public static final String WECHAT_PUBLIC_KEY_ID_INVALID = "wechat.publicKeyId.invalid";
+    public static final String WECHAT_CERT_REQUIRED = "wechat.cert.required";
+    public static final String WECHAT_PUBLIC_KEY_REQUIRED = "wechat.publicKey.required";
+    public static final String WECHAT_PUBLIC_KEY_PAIR_REQUIRED = "wechat.publicKeyPair.required";
+    public static final String WECHAT_CERT_AND_KEY_TOGETHER = "wechat.certAndKeyTogether";
+    public static final String WECHAT_CERT_READ_FAILED = "wechat.certReadFailed";
+    public static final String WECHAT_CERT_KEY_MISMATCH = "wechat.certKeyMismatch";
 
     public static final String EDGE_CONFIG_HOST_REQUIRED = "edge.config.hostRequired";
     public static final String EDGE_CONFIG_HOST_INVALID = "edge.config.hostInvalid";

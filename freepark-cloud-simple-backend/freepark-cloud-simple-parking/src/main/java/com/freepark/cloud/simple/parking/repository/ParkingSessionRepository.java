@@ -13,9 +13,6 @@ public interface ParkingSessionRepository
 
     boolean existsByLotIdAndPlateNumberIgnoreCaseAndStatus(Long lotId, String plate, ParkingSessionStatus status);
 
-    List<ParkingSession> findAllByLotIdAndPlateNumberIgnoreCaseAndStatus(
-            Long lotId, String plate, ParkingSessionStatus status);
-
     Optional<ParkingSession> findFirstByLotIdAndPlateNumberIgnoreCaseAndStatusOrderByEntryTimeDesc(
             Long lotId, String plate, ParkingSessionStatus status);
 

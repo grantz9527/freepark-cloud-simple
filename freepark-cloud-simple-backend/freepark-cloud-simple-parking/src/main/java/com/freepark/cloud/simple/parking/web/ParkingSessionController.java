@@ -76,7 +76,7 @@ public class ParkingSessionController {
         return ApiResult.ok(parkingSessionService.recalcLatestSession(lotId, plateNumber));
     }
 
-    /** 手动新增在场流水（入场）。 */
+    /** 手动新增流水：不带出场生成在场流水；带出场直接生成已出场完整流水并结算应收。 */
     @PostMapping
     public ApiResult<ParkingSessionView> create(@RequestBody CreateParkingSessionRequest request) {
         return ApiResult.ok(parkingSessionService.createSession(request));

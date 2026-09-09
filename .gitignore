@@ -36,3 +36,6 @@ migrate_tz.sql
 # Local runtime/verify leftovers (do not commit)
 .tmp-verify/
 **/freepark-cloud-edge-*/
+
+# 本地站点工程（local_server 等），不入库
+_workspace_freepark/

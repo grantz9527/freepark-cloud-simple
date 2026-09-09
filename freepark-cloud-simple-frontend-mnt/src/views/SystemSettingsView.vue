@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 import request from '../utils/request'
 import { useBiText, type BiDict } from '../utils/biText'
 import { currencyNameOf, currencyOptionLabel } from '../utils/currency'
-
+import { paymentMethodNameOf } from '../utils/payment'
 const d: BiDict = {
   loading: { 'zh-CN': '正在加载配置…', en: 'Loading settings…' },
   regional: { 'zh-CN': '区域与语言', en: 'Region & Language' },
@@ -16,6 +16,21 @@ const d: BiDict = {
   languageZh: { 'zh-CN': '简体中文', en: 'Simplified Chinese' },
   languageEn: { 'zh-CN': '英文', en: 'English' },
   timezone: { 'zh-CN': '时区', en: 'Timezone' },
+  plateRegion: { 'zh-CN': '车牌版式（区域）', en: 'Plate style (region)' },
+  plateRegionHint: {
+    'zh-CN': '选择该站点车牌的默认格式，用户端查询页将按此区域渲染车牌输入交互。',
+    en: 'Pick the default plate format of this site. The public search page renders its plate input UI based on this region.'
+  },
+  regionCN: { 'zh-CN': '中国大陆', en: 'Mainland China' },
+  regionHK: { 'zh-CN': '中国香港', en: 'Hong Kong, China' },
+  regionMO: { 'zh-CN': '中国澳门', en: 'Macao, China' },
+  regionTW: { 'zh-CN': '中国台湾', en: 'Taiwan, China' },
+  regionEU: { 'zh-CN': '欧盟', en: 'EU' },
+  regionGB: { 'zh-CN': '英国', en: 'United Kingdom' },
+  regionUS: { 'zh-CN': '美国', en: 'United States' },
+  regionJP: { 'zh-CN': '日本', en: 'Japan' },
+  regionKR: { 'zh-CN': '韩国', en: 'Korea' },
+  regionSG: { 'zh-CN': '新加坡', en: 'Singapore' },
   plateColors: { 'zh-CN': '车牌颜色', en: 'Plate Colors' },
   plateColorsHint: {
     'zh-CN': '勾选允许的车牌颜色（至少要保留一种），并指定默认颜色。默认颜色必须是允许颜色之一。',
@@ -82,6 +97,16 @@ const d: BiDict = {
     'zh-CN': '至少保留一种允许的币种',
     en: 'Keep at least one allowed currency'
   },
+  paymentMethods: { 'zh-CN': '收费方式', en: 'Payment Methods' },
+  paymentMethodsHint: {
+    'zh-CN': '勾选站点允许使用的缴费方式。至少保留一种；启用后可在用户端缴费流程中展示。',
+    en: 'Check the payment methods this site supports. Keep at least one; enabled methods are shown in the public payment flow.'
+  },
+  allowedPaymentMethods: { 'zh-CN': '允许的收费方式', en: 'Allowed payment methods' },
+  atLeastOnePaymentMethod: {
+    'zh-CN': '至少保留一种收费方式',
+    en: 'Keep at least one payment method'
+  },
   atLeastOne: { 'zh-CN': '至少保留一种允许的车牌颜色', en: 'Keep at least one allowed plate color' },
   saved: { 'zh-CN': '配置已保存', en: 'Settings saved' },
   save: { 'zh-CN': '保存配置', en: 'Save settings' },
@@ -96,14 +121,18 @@ const { t, locale } = useBiText(d)
 interface SystemSettingsData {
   defaultLocale: string
   timezone: string
+  plateRegion: string
   defaultPlateColor: string
   allowedPlateColors: string[]
   defaultCurrency: string
   allowedCurrencies: string[]
+  allowedPaymentMethods: string[]
   supportedLocales: string[]
   supportedTimezones: string[]
+  supportedPlateRegions: string[]
   supportedPlateColors: string[]
   supportedCurrencies: string[]
+  supportedPaymentMethods: string[]
   updatedAt: string
 }
 
@@ -113,14 +142,18 @@ const data = ref<SystemSettingsData | null>(null)
 
 const defaultLocale = ref('zh-CN')
 const timezone = ref('Asia/Shanghai')
+const plateRegion = ref('CN')
 const defaultPlateColor = ref('BLUE')
 const allowedPlateColors = ref<string[]>([])
 const defaultCurrency = ref('CNY')
 const allowedCurrencies = ref<string[]>([])
+const allowedPaymentMethods = ref<string[]>([])
 const supportedLocales = ref<string[]>([])
 const supportedTimezones = ref<string[]>([])
+const supportedPlateRegions = ref<string[]>([])
 const supportedPlateColors = ref<string[]>([])
 const supportedCurrencies = ref<string[]>([])
+const supportedPaymentMethods = ref<string[]>([])
 const updatedAt = ref('')
 
 /** 颜色块配色：与参考实现 PlateColor 枚举对应的近似底色 */
@@ -183,6 +216,21 @@ const localeOptions = computed(() =>
   }))
 )
 
+/** 车牌版式（区域）选项 */
+const regionOptions = computed(() =>
+  supportedPlateRegions.value.map((code) => ({
+    value: code,
+    label: regionLabel(code)
+  }))
+)
+
+function regionLabel(code: string): string {
+  const key = `region${code}`
+  const dict = d[key]
+  if (!dict) return code
+  return locale.value === 'en' ? dict.en : dict['zh-CN']
+}
+
 /** 默认颜色下拉展示全部支持颜色，但只能选择“已允许”的颜色 */
 const defaultColorOptions = computed(() =>
   supportedPlateColors.value.map((color) => ({
@@ -233,6 +281,28 @@ function toggleCurrency(code: string, checked: boolean): void {
     return
   }
   allowedCurrencies.value = allowedCurrencies.value.filter((item) => item !== code)
+}
+
+function isAllowedPaymentMethod(code: string): boolean {
+  return allowedPaymentMethods.value.includes(code)
+}
+
+function togglePaymentMethod(code: string, checked: boolean): void {
+  if (checked) {
+    if (!allowedPaymentMethods.value.includes(code)) {
+      allowedPaymentMethods.value = [...allowedPaymentMethods.value, code]
+    }
+    return
+  }
+  if (allowedPaymentMethods.value.length <= 1) {
+    ElMessage.warning(t('atLeastOnePaymentMethod'))
+    return
+  }
+  allowedPaymentMethods.value = allowedPaymentMethods.value.filter((item) => item !== code)
+}
+
+function paymentMethodName(code: string): string {
+  return paymentMethodNameOf(code, locale.value)
 }
 
 function colorLabel(color: string): string {
@@ -309,14 +379,18 @@ async function loadSettings(): Promise<void> {
     const view = data.value
     defaultLocale.value = view.defaultLocale
     timezone.value = view.timezone
+    plateRegion.value = view.plateRegion ?? 'CN'
     defaultPlateColor.value = view.defaultPlateColor
     allowedPlateColors.value = [...view.allowedPlateColors]
     defaultCurrency.value = view.defaultCurrency
     allowedCurrencies.value = [...view.allowedCurrencies]
+    allowedPaymentMethods.value = [...view.allowedPaymentMethods]
     supportedLocales.value = [...view.supportedLocales]
     supportedTimezones.value = [...view.supportedTimezones]
+    supportedPlateRegions.value = [...view.supportedPlateRegions]
     supportedPlateColors.value = [...view.supportedPlateColors]
     supportedCurrencies.value = [...view.supportedCurrencies]
+    supportedPaymentMethods.value = [...view.supportedPaymentMethods]
     updatedAt.value = view.updatedAt
   } catch (error) {
     ElMessage.error(error instanceof Error && error.message ? error.message : t('loadFailed'))
@@ -334,22 +408,30 @@ async function handleSave(): Promise<void> {
     ElMessage.warning(t('atLeastOneCurrency'))
     return
   }
+  if (allowedPaymentMethods.value.length === 0) {
+    ElMessage.warning(t('atLeastOnePaymentMethod'))
+    return
+  }
   saving.value = true
   try {
     const view = await request.put<never, SystemSettingsData>('/system/settings', {
       defaultLocale: defaultLocale.value,
       timezone: timezone.value,
+      plateRegion: plateRegion.value,
       defaultPlateColor: defaultPlateColor.value,
       allowedPlateColors: allowedPlateColors.value,
       defaultCurrency: defaultCurrency.value,
-      allowedCurrencies: allowedCurrencies.value
+      allowedCurrencies: allowedCurrencies.value,
+      allowedPaymentMethods: allowedPaymentMethods.value
     })
     defaultLocale.value = view.defaultLocale
     timezone.value = view.timezone
+    plateRegion.value = view.plateRegion ?? 'CN'
     defaultPlateColor.value = view.defaultPlateColor
     allowedPlateColors.value = [...view.allowedPlateColors]
     defaultCurrency.value = view.defaultCurrency
     allowedCurrencies.value = [...view.allowedCurrencies]
+    allowedPaymentMethods.value = [...view.allowedPaymentMethods]
     updatedAt.value = view.updatedAt
     ElMessage.success(t('saved'))
   } catch (error) {
@@ -394,6 +476,20 @@ onMounted(loadSettings)
             </el-select>
           </el-form-item>
         </div>
+
+        <div class="field-grid single">
+          <el-form-item :label="t('plateRegion')">
+            <el-select v-model="plateRegion" class="field">
+              <el-option
+                v-for="option in regionOptions"
+                :key="option.value"
+                :value="option.value"
+                :label="option.label"
+              />
+            </el-select>
+          </el-form-item>
+        </div>
+        <p class="group-hint">{{ t('plateRegionHint') }}</p>
 
         <el-divider />
 
@@ -467,6 +563,29 @@ onMounted(loadSettings)
               />
             </el-select>
           </el-form-item>
+        </div>
+
+        <el-divider />
+
+        <h3 class="group-title">{{ t('paymentMethods') }}</h3>
+        <p class="group-hint">{{ t('paymentMethodsHint') }}</p>
+
+        <div class="colors-block">
+          <span class="field-label">{{ t('allowedPaymentMethods') }}</span>
+          <div class="currency-grid">
+            <label
+              v-for="code in supportedPaymentMethods"
+              :key="code"
+              class="currency-option"
+              :class="{ disabled: isAllowedPaymentMethod(code) && allowedPaymentMethods.length === 1 }"
+            >
+              <el-checkbox
+                :model-value="isAllowedPaymentMethod(code)"
+                @change="(checked: boolean | string | number) => togglePaymentMethod(code, Boolean(checked))"
+              />
+              <span class="chip currency-chip payment-chip">{{ paymentMethodName(code) }}</span>
+            </label>
+          </div>
         </div>
 
         <div class="form-footer">
@@ -584,6 +703,12 @@ onMounted(loadSettings)
   color: var(--fp-text, #2f3640);
   min-width: 72px;
   white-space: nowrap;
+}
+
+.payment-chip {
+  background: rgba(7, 193, 96, 0.12);
+  border-color: rgba(7, 193, 96, 0.35);
+  color: #07c160;
 }
 
 .form-footer {

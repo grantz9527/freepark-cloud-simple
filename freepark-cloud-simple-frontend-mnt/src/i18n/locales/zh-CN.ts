@@ -62,6 +62,8 @@ export default {
     dailyBillingRules: '每日制计费规则',
     dateManagement: '日期管理',
     billingCycleProfiles: '计费周期',
+    wechat: '微信相关',
+    wechatConfig: '微信配置',
     system: '系统管理',
     systemAdmins: '管理员管理',
     systemSettings: '系统配置',

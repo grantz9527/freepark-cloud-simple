@@ -16,6 +16,7 @@ public record LotView(
         int totalSpaces,
         boolean enabled,
         String mapData,
+        String arrearsScope,
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {
 
@@ -29,6 +30,7 @@ public record LotView(
                 lot.getTotalSpaces(),
                 lot.isEnabled(),
                 lot.getMapData(),
+                lot.getArrearsScope().name(),
                 lot.getCreatedAt(),
                 lot.getUpdatedAt());
     }

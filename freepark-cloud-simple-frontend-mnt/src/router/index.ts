@@ -134,6 +134,12 @@ const router = createRouter({
           meta: { titleKey: 'menu.billingCycleProfiles' }
         },
         {
+          path: 'wechat/config',
+          name: 'wechat-config',
+          component: () => import('../views/WeChatConfigView.vue'),
+          meta: { titleKey: 'menu.wechatConfig' }
+        },
+        {
           path: 'system/admins',
           name: 'system-admins',
           component: () => import('../views/UserManageView.vue'),
