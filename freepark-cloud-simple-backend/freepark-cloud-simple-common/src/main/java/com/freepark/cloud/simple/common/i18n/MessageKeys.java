@@ -42,6 +42,9 @@ public final class MessageKeys {
     public static final String PARKING_PATTERN_ALLOWLIST_PATTERN_EXISTS = "parking.patternAllowlist.patternExists";
     public static final String PARKING_PATTERN_ALLOWLIST_INVALID_PATTERN = "parking.patternAllowlist.invalidPattern";
     public static final String PARKING_SESSION_OPEN_ALREADY_EXISTS = "parking.session.openAlreadyExists";
+    public static final String PARKING_SESSION_HAS_PAYMENTS = "parking.session.hasPayments";
+    public static final String PARKING_ORDER_NOT_PAYABLE = "parking.order.notPayable";
+    public static final String PARKING_ORDER_BAD_STATE = "parking.order.badState";
 
     public static final String BILLING_DATE_INVALID_TYPE = "billing.date.invalidType";
     public static final String BILLING_DATE_INVALID_RANGE = "billing.date.invalidRange";
@@ -91,6 +94,12 @@ public final class MessageKeys {
     public static final String WECHAT_CERT_AND_KEY_TOGETHER = "wechat.certAndKeyTogether";
     public static final String WECHAT_CERT_READ_FAILED = "wechat.certReadFailed";
     public static final String WECHAT_CERT_KEY_MISMATCH = "wechat.certKeyMismatch";
+
+    public static final String ALIPAY_APP_ID_REQUIRED = "alipay.appId.required";
+    public static final String ALIPAY_APP_ID_INVALID = "alipay.appId.invalid";
+    public static final String ALIPAY_PRIVATE_KEY_INVALID = "alipay.privateKey.invalid";
+    public static final String ALIPAY_PUBLIC_KEY_INVALID = "alipay.publicKey.invalid";
+    public static final String ALIPAY_KEY_READ_FAILED = "alipay.keyReadFailed";
 
     public static final String EDGE_CONFIG_HOST_REQUIRED = "edge.config.hostRequired";
     public static final String EDGE_CONFIG_HOST_INVALID = "edge.config.hostInvalid";

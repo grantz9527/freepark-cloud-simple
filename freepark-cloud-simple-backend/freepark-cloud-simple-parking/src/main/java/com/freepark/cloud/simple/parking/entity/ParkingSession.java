@@ -95,14 +95,23 @@ public class ParkingSession {
     private BigDecimal feeYuan;
 
     /**
+     * 累计已支付金额（元）：通过停车订单收款入账后累加；无任何收款为 0。
+     * 支付状态按「应收快照 vs 累计已支付」自动推导（付清→已支付、未满→部分支付），
+     * 再次收费时订单金额 = 当前应收 − 累计已支付 − 该流水未付订单合计，避免重复计费。
+     */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal paidAmountYuan;
+
+    /**
      * 支付状态：仅已出场（CLOSED）流水登记；在场/已作废为 null。
-     * 关场时默认置为 UNPAID，之后由人工登记更新，不随费用重算自动变化。
+     * 关场时默认置为 UNPAID；有订单收款入账后按金额自动推导并回写。
+     * 历史无金额记录的数据（累计已支付为 0）保留原登记状态作为兜底口径。
      */
     @Enumerated(EnumType.STRING)
     @Column(length = 16)
     private ParkingPayStatus payStatus;
 
-    /** 支付时间：登记为「已支付」的时刻；仅已支付流水有意义。 */
+    /** 支付时间：付清（累计已支付 ≥ 应收）的时刻；仅已支付流水有意义。 */
     private LocalDateTime payTime;
 
     /**
@@ -297,6 +306,41 @@ public class ParkingSession {
 
     public void setPayStatus(ParkingPayStatus payStatus) {
         this.payStatus = payStatus;
+    }
+
+    public BigDecimal getPaidAmountYuan() {
+        return paidAmountYuan;
+    }
+
+    public void setPaidAmountYuan(BigDecimal paidAmountYuan) {
+        this.paidAmountYuan = paidAmountYuan;
+    }
+
+    /** 累计已支付金额（null 视为 0）。 */
+    public BigDecimal paidAmountOrZero() {
+        return paidAmountYuan == null ? BigDecimal.ZERO : paidAmountYuan;
+    }
+
+    /**
+     * 按金额自动推导支付状态并回写（仅在已出场流水上有意义）：
+     * 累计已支付 ≥ 应收快照 → 已支付（记录/保留支付时间）；0 < 已支付 < 应收 → 部分支付。
+     * 无金额记录（累计已支付为 0）不覆盖原有登记状态，兼容历史数据。
+     */
+    public void syncPayStatusFromMoney() {
+        if (this.status != ParkingSessionStatus.CLOSED
+                || paidAmountOrZero().signum() <= 0) {
+            return;
+        }
+        BigDecimal fee = this.feeYuan;
+        if (fee != null && paidAmountYuan.compareTo(fee) >= 0) {
+            this.payStatus = ParkingPayStatus.PAID;
+            if (this.payTime == null) {
+                this.payTime = SiteZoneTimes.nowUtc();
+            }
+        } else {
+            this.payStatus = ParkingPayStatus.PARTIAL;
+            this.payTime = null;
+        }
     }
 
     public LocalDateTime getPayTime() {

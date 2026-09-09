@@ -5,12 +5,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freepark.cloud.simple.billing.service.BillingSessionChargeService;
 import com.freepark.cloud.simple.parking.entity.DiscountVehicle;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
+import com.freepark.cloud.simple.parking.entity.ParkingOrder;
+import com.freepark.cloud.simple.parking.entity.ParkingOrderStatus;
 import com.freepark.cloud.simple.parking.entity.ParkingPayStatus;
 import com.freepark.cloud.simple.parking.entity.ParkingSession;
 import com.freepark.cloud.simple.parking.entity.ParkingSessionStatus;
 import com.freepark.cloud.simple.parking.entity.PlateColor;
 import com.freepark.cloud.simple.parking.repository.DiscountVehicleRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
+import com.freepark.cloud.simple.parking.repository.ParkingOrderRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingSessionRepository;
 import com.freepark.cloud.simple.settings.entity.EdgeMqttConfig;
 import com.freepark.cloud.simple.settings.runtime.EdgeInboundConsumer;
@@ -51,6 +54,7 @@ public class EdgeParkingSessionReceiver implements EdgeInboundConsumer {
     private final ParkingSessionRepository sessionRepository;
     private final ParkingLotRepository lotRepository;
     private final DiscountVehicleRepository discountVehicles;
+    private final ParkingOrderRepository orderRepository;
     private final BillingSessionChargeService chargeService;
     private final ObjectMapper objectMapper;
 
@@ -58,12 +62,14 @@ public class EdgeParkingSessionReceiver implements EdgeInboundConsumer {
             ParkingSessionRepository sessionRepository,
             ParkingLotRepository lotRepository,
             DiscountVehicleRepository discountVehicles,
+            ParkingOrderRepository orderRepository,
             BillingSessionChargeService chargeService,
             ObjectMapper objectMapper) {
         this.configService = configService;
         this.sessionRepository = sessionRepository;
         this.lotRepository = lotRepository;
         this.discountVehicles = discountVehicles;
+        this.orderRepository = orderRepository;
         this.chargeService = chargeService;
         this.objectMapper = objectMapper;
     }
@@ -158,14 +164,33 @@ public class EdgeParkingSessionReceiver implements EdgeInboundConsumer {
             session.setPayStatus(ParkingPayStatus.UNPAID);
         }
         if (status == ParkingSessionStatus.VOIDED) {
+            if (session.getId() != null && session.paidAmountOrZero().signum() > 0) {
+                // 该流水在云端已有收款入账：作废会抹掉真实收款记录，忽略本次作废上报
+                log.warn("忽略边缘作废上报：云端流水已有收款 nodeCode={} edgeSessionId={} paidAmount={}",
+                        nodeCode, edgeSessionId, session.paidAmountOrZero());
+                return;
+            }
             // 与云端作废语义一致：作废清空支付状态与时间
             session.setPayStatus(null);
             session.setPayTime(null);
         }
         settleFee(session);
         sessionRepository.save(session);
+        if (status == ParkingSessionStatus.VOIDED && session.getId() != null) {
+            cancelPendingOrders(session.getId());
+        }
         log.info("已入库边缘停车流水 nodeCode={} edgeSessionId={} status={} plate={}",
                 nodeCode, edgeSessionId, status, session.getPlateNumber());
+    }
+
+    /** 流水作废时把其「待支付」订单一并取消，避免金额占用残留。 */
+    private void cancelPendingOrders(Long sessionId) {
+        for (ParkingOrder order : orderRepository.findBySessionIdAndStatus(
+                sessionId, ParkingOrderStatus.PENDING)) {
+            order.setStatus(ParkingOrderStatus.CANCELLED);
+            order.setPayTime(null);
+            orderRepository.save(order);
+        }
     }
 
     /**

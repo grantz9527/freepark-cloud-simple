@@ -98,6 +98,12 @@ const router = createRouter({
           meta: { titleKey: 'menu.parkingSessions' }
         },
         {
+          path: 'parking/orders',
+          name: 'parking-orders',
+          component: () => import('../views/ParkingOrdersView.vue'),
+          meta: { titleKey: 'menu.parkingOrders' }
+        },
+        {
           path: 'parking/discount-vehicles',
           name: 'discount-vehicles',
           component: () => import('../views/DiscountVehiclesView.vue'),
@@ -138,6 +144,12 @@ const router = createRouter({
           name: 'wechat-config',
           component: () => import('../views/WeChatConfigView.vue'),
           meta: { titleKey: 'menu.wechatConfig' }
+        },
+        {
+          path: 'alipay/config',
+          name: 'alipay-config',
+          component: () => import('../views/AlipayConfigView.vue'),
+          meta: { titleKey: 'menu.alipayConfig' }
         },
         {
           path: 'system/admins',

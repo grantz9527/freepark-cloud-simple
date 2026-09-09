@@ -4,7 +4,7 @@ import com.freepark.cloud.simple.common.ApiResult;
 import com.freepark.cloud.simple.common.web.PageResult;
 import com.freepark.cloud.simple.parking.dto.CreateParkingSessionRequest;
 import com.freepark.cloud.simple.parking.dto.ParkingSessionView;
-import com.freepark.cloud.simple.parking.dto.PayStatusRequest;
+import com.freepark.cloud.simple.parking.dto.PayableQuoteView;
 import com.freepark.cloud.simple.parking.dto.UpdateParkingSessionRequest;
 import com.freepark.cloud.simple.parking.dto.VehicleArrearsResult;
 import com.freepark.cloud.simple.parking.entity.ParkingSessionStatus;
@@ -112,10 +112,12 @@ public class ParkingSessionController {
         return ApiResult.ok(parkingSessionService.recalculateSession(sessionId));
     }
 
-    /** 人工登记支付状态（未支付/部分支付/已支付），仅已出场流水可登记；费用重算不自动改变它。 */
-    @PostMapping("/{sessionId}/pay-status")
-    public ApiResult<ParkingSessionView> markPayStatus(@PathVariable Long sessionId,
-                                                       @RequestBody PayStatusRequest request) {
-        return ApiResult.ok(parkingSessionService.markPayStatus(sessionId, request.status()));
+    /**
+     * 下单前可收款预览：返回流水当前应收、累计已支付、待付订单与本次可收款金额，
+     * 供停车流水/车费查询页在「登记收款/缴费」弹窗确认前展示（应付=应收−已付−待付订单）。
+     */
+    @GetMapping("/{sessionId}/payable-quote")
+    public ApiResult<PayableQuoteView> payableQuote(@PathVariable Long sessionId) {
+        return ApiResult.ok(parkingSessionService.payableQuote(sessionId));
     }
 }

@@ -89,7 +89,7 @@ public final class SystemSettingsOptions {
     /**
      * 收费方式：站点支持的缴费/收款渠道预置列表，勾选启用。
      */
-    public static final List<String> SUPPORTED_PAYMENT_METHODS = List.of("WECHAT_PAY");
+    public static final List<String> SUPPORTED_PAYMENT_METHODS = List.of("WECHAT_PAY", "ALIPAY_PAY");
 
     /** 默认启用的收费方式 */
     public static final List<String> DEFAULT_ALLOWED_PAYMENT_METHODS = List.of("WECHAT_PAY");

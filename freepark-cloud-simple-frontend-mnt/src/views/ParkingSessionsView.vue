@@ -26,19 +26,27 @@ const d: BiDict = {
   closeNow: { 'zh-CN': '同时补录出场信息', en: 'Include exit info' },
   duration: { 'zh-CN': '停车时长', en: 'Duration' },
   fee: { 'zh-CN': '应收金额', en: 'Fee due' },
+  paidAmount: { 'zh-CN': '累计已支付', en: 'Paid' },
+  payable: { 'zh-CN': '剩余应付', en: 'Payable' },
+  payableTip: { 'zh-CN': '剩余应付 = 应收金额 − 累计已支付 − 待付订单', en: 'Payable = fee due − paid − pending orders' },
   payStatus: { 'zh-CN': '支付状态', en: 'Payment status' },
   payTime: { 'zh-CN': '支付时间', en: 'Paid at' },
   payUnpaid: { 'zh-CN': '未支付', en: 'Unpaid' },
   payPartial: { 'zh-CN': '部分支付', en: 'Partially paid' },
   payPaid: { 'zh-CN': '已支付', en: 'Paid' },
   payFree: { 'zh-CN': '免缴费', en: 'Free' },
-  payReg: { 'zh-CN': '登记支付', en: 'Record pay' },
-  payTitle: { 'zh-CN': '登记支付', en: 'Record payment' },
-  payMsg: {
-    'zh-CN': '为车牌 {plate} 的已出场流水登记支付结果（应收 {fee}，已支付将记录当前时间为支付时间）：',
-    en: 'Record the payment result for plate {plate} (fee due {fee}; PAID stores the current time as paid-at):'
+  collect: { 'zh-CN': '收款', en: 'Collect' },
+  collectTitle: { 'zh-CN': '登记收款', en: 'Register payment' },
+  noNeedPay: { 'zh-CN': '该流水当前无需再缴费', en: 'No payment is due for this session' },
+  collectSuccess: { 'zh-CN': '收款成功，已计入流水累计已支付', en: 'Payment credited to the session' },
+  openCollectTip: {
+    'zh-CN': '该流水仍在场，本次应付按「入场 ~ 当前时刻」估算；出场结算时会按真实出场时间重新计费，仅需补缴新产生的金额。',
+    en: 'Session is still open; this order is estimated up to now and will be re-settled at exit with the real exit time.'
   },
-  payUpdated: { 'zh-CN': '支付状态已更新', en: 'Payment status updated' },
+  quoteReceivable: { 'zh-CN': '当前应收', en: 'Receivable now' },
+  quotePaid: { 'zh-CN': '累计已支付', en: 'Paid' },
+  quotePending: { 'zh-CN': '待付订单', en: 'Pending orders' },
+  quotePayable: { 'zh-CN': '本次应付', en: 'This payment' },
   recalc: { 'zh-CN': '重新算费', en: 'Recalculate' },
   recalcSuccess: { 'zh-CN': '已按当前计费配置重新算费', en: 'Fee recalculated with current config' },
   recalcPreviewTitle: { 'zh-CN': '重新算费 - 确认结果', en: 'Recalculate - confirm result' },
@@ -120,6 +128,18 @@ interface SessionRow {
   payStatus: 'UNPAID' | 'PARTIAL' | 'PAID' | 'FREE' | null
   payTime: string | null
   parkedMinutes: number | null
+  paidAmountYuan: number
+  pendingYuan: number
+  payableYuan: number | null
+}
+
+/** 下单前可收款预览（GET /parking-sessions/{id}/payable-quote 返回）。 */
+interface PayQuote {
+  sessionId: number
+  receivableYuan: number
+  paidYuan: number
+  pendingYuan: number
+  payableYuan: number
 }
 
 const route = useRoute()
@@ -133,10 +153,10 @@ const dialogVisible = ref(false)
 const editing = ref<SessionRow | null>(null)
 const saving = ref(false)
 
-/** 登记支付小弹窗状态：仅对已出场流水开放三态登记（未支付/部分支付/已支付）。 */
+/** 登记收款弹窗状态：先生成停车订单、确认后登记收款并入账到流水累计已支付。 */
 const payDialogVisible = ref(false)
 const payRow = ref<SessionRow | null>(null)
-const payStatus = ref<'UNPAID' | 'PARTIAL' | 'PAID'>('UNPAID')
+const payQuote = ref<PayQuote | null>(null)
 const paySaving = ref(false)
 
 interface Filters {
@@ -705,23 +725,42 @@ async function handleRecalc(row: SessionRow) {
   }
 }
 
-/** 打开支付登记弹窗：回显当前登记状态；仅已出场且非「免缴费」流水可登记。 */
-function openPay(row: SessionRow) {
+/**
+ * 打开登记收款弹窗：先拉取「可收款预览」（应收 − 累计已支付 − 待付订单）。
+ * 当前无需再缴费（应付 ≤ 0）时提示并直接返回，避免重复缴费。
+ */
+async function openPay(row: SessionRow) {
+  let quote: PayQuote
+  try {
+    quote = await request.get<never, PayQuote>(`/parking-sessions/${row.id}/payable-quote`)
+  } catch (error) {
+    ElMessage.error((error as Error)?.message ?? t('reqFailed'))
+    return
+  }
+  if (quote.payableYuan <= 0) {
+    ElMessage.info(t('noNeedPay'))
+    return
+  }
   payRow.value = row
-  const current = row.payStatus
-  payStatus.value = current === 'PAID' || current === 'PARTIAL' ? current : 'UNPAID'
+  payQuote.value = quote
   payDialogVisible.value = true
 }
 
-/** 提交支付登记：三态由人工选择；费用重算/编辑不会自动改变支付状态。 */
+/**
+ * 提交登记收款：先生成一笔停车订单（金额 = 本次应付），再把该订单登记为已支付，
+ * 金额随即累加到关联流水「累计已支付」并自动推导支付状态。
+ */
 async function submitPay() {
-  if (!payRow.value) {
+  if (!payRow.value || !payQuote.value) {
     return
   }
   paySaving.value = true
   try {
-    await request.post(`/parking-sessions/${payRow.value.id}/pay-status`, { status: payStatus.value })
-    ElMessage.success(t('payUpdated'))
+    const order = await request.post<never, { id: number }>('/parking-orders', {
+      sessionId: payRow.value.id
+    })
+    await request.post(`/parking-orders/${order.id}/pay`)
+    ElMessage.success(t('collectSuccess'))
     payDialogVisible.value = false
     loadRows()
   } catch (error) {
@@ -827,6 +866,20 @@ onMounted(async () => {
             <span :class="{ 'fee-cell': row.feeYuan != null }">{{ feeText(row.feeYuan) }}</span>
           </template>
         </el-table-column>
+        <el-table-column :label="t('paidAmount')" min-width="120" align="right">
+          <template #default="{ row }">
+            <span>{{ feeText(row.paidAmountYuan ?? 0) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('payable')" min-width="125" align="right">
+          <template #default="{ row }">
+            <el-tooltip :content="t('payableTip')" placement="top">
+              <span :class="{ 'payable-cell': row.payableYuan != null && row.payableYuan > 0 }">
+                {{ feeText(row.payableYuan) }}
+              </span>
+            </el-tooltip>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('payStatus')" min-width="110">
           <template #default="{ row }">
             <el-tag v-if="row.payStatus" :type="payTagType(row.payStatus)" disable-transitions>
@@ -849,8 +902,13 @@ onMounted(async () => {
               <el-button v-if="row.status !== 'VOIDED'" link type="primary" @click="handleRecalc(row)">
                 {{ t('recalc') }}
               </el-button>
-              <el-button v-if="row.status === 'CLOSED' && row.payStatus !== 'FREE'" link type="primary" @click="openPay(row)">
-                {{ t('payReg') }}
+              <el-button
+                v-if="row.status !== 'VOIDED' && row.payStatus !== 'FREE' && row.payStatus !== 'PAID'"
+                link
+                type="primary"
+                @click="openPay(row)"
+              >
+                {{ t('collect') }}
               </el-button>
               <el-button v-if="row.status !== 'VOIDED'" link type="danger" @click="handleVoid(row)">
                 {{ t('void') }}
@@ -932,18 +990,38 @@ onMounted(async () => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="payDialogVisible" :title="t('payTitle')" width="440px" destroy-on-close>
-      <p v-if="payRow" class="pay-dialog-tip">
-        {{ t('payMsg').replace('{plate}', payRow.plateNumber).replace('{fee}', feeText(payRow.feeYuan)) }}
-      </p>
-      <el-radio-group v-model="payStatus">
-        <el-radio v-for="item in payStatusOptions" :key="item.value" :value="item.value">
-          {{ item.label }}
-        </el-radio>
-      </el-radio-group>
+    <el-dialog v-model="payDialogVisible" :title="t('collectTitle')" width="460px" destroy-on-close>
+      <div v-if="payRow" class="pay-plate-row">
+        <el-tooltip :disabled="!payRow.plateColor" :content="plateColorLabel(payRow.plateColor)" placement="top">
+          <span class="plate-badge" :style="plateBadgeStyle(payRow.plateColor)">
+            {{ payRow.plateNumber }}
+          </span>
+        </el-tooltip>
+        <el-tag v-if="payRow.status === 'OPEN'" type="success" effect="plain" disable-transitions>
+          {{ t('statusOpen') }}
+        </el-tag>
+        <el-tag v-else type="info" effect="plain" disable-transitions>
+          {{ t('statusClosed') }}
+        </el-tag>
+      </div>
+      <p v-if="payRow?.status === 'OPEN'" class="pay-dialog-tip">{{ t('openCollectTip') }}</p>
+      <el-descriptions v-if="payQuote" :column="1" size="small" border class="pay-quote-desc">
+        <el-descriptions-item :label="t('quoteReceivable')">
+          {{ feeText(payQuote.receivableYuan) }}
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('quotePaid')">
+          {{ feeText(payQuote.paidYuan) }}
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('quotePending')">
+          {{ feeText(payQuote.pendingYuan) }}
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('quotePayable')">
+          <span class="payable-cell">{{ feeText(payQuote.payableYuan) }}</span>
+        </el-descriptions-item>
+      </el-descriptions>
       <template #footer>
         <el-button @click="payDialogVisible = false">{{ t('cancel') }}</el-button>
-        <el-button type="primary" :loading="paySaving" @click="submitPay">{{ t('confirm') }}</el-button>
+        <el-button type="primary" :loading="paySaving" @click="submitPay">{{ t('collect') }}</el-button>
       </template>
     </el-dialog>
   </section>
@@ -1024,5 +1102,21 @@ onMounted(async () => {
   font-size: 13px;
   line-height: 1.7;
   color: #606266;
+}
+
+.pay-plate-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.pay-quote-desc {
+  margin-bottom: 4px;
+}
+
+.payable-cell {
+  font-weight: 700;
+  color: #d03050;
 }
 </style>

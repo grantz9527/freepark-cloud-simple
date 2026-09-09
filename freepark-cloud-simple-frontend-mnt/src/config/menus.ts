@@ -86,6 +86,11 @@ export const classicMenus: MenuItem[] = [
         path: '/parking/sessions'
       },
       {
+        id: 'parking-orders',
+        titleKey: 'menu.parkingOrders',
+        path: '/parking/orders'
+      },
+      {
         id: 'discount-vehicles',
         titleKey: 'menu.discountVehicles',
         path: '/parking/discount-vehicles'
@@ -132,6 +137,18 @@ export const classicMenus: MenuItem[] = [
         id: 'wechat-config',
         titleKey: 'menu.wechatConfig',
         path: '/wechat/config'
+      }
+    ]
+  },
+  {
+    id: 'alipay',
+    titleKey: 'menu.alipay',
+    roles: ['SUPER_ADMIN'],
+    children: [
+      {
+        id: 'alipay-config',
+        titleKey: 'menu.alipayConfig',
+        path: '/alipay/config'
       }
     ]
   },
