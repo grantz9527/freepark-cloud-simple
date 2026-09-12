@@ -1,10 +1,20 @@
+server:
+  port: 8080
+
 spring:
   application:
     name: freepark-cloud-simple
   profiles:
     active: dev
-server:
-  port: 8080
+  datasource:
+    url: ${FREEPARK_MYSQL_URL:*}
+    username: ${FREEPARK_MYSQL_UNAME:*}
+    password: ${FREEPARK_MYSQL_PWD:*}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
 
 freepark:
   cors:
