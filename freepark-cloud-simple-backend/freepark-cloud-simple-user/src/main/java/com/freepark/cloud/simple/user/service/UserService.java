@@ -4,6 +4,7 @@ import com.freepark.cloud.simple.common.auth.AuthContext;
 import com.freepark.cloud.simple.common.auth.JwtUtil;
 import com.freepark.cloud.simple.common.i18n.BizException;
 import com.freepark.cloud.simple.common.i18n.MessageKeys;
+import com.freepark.cloud.simple.common.time.SiteZoneTimes;
 import com.freepark.cloud.simple.common.web.PageResult;
 import com.freepark.cloud.simple.user.dto.AdminCreateRequest;
 import com.freepark.cloud.simple.user.dto.LoginResponse;
@@ -18,6 +19,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -27,6 +30,11 @@ public class UserService {
     private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]{3,64}$");
     private static final int MIN_PASSWORD_LENGTH = 6;
     private static final int MAX_PAGE_SIZE = 100;
+
+    /** 连续登录失败达到该次数后锁定账号 */
+    private static final int MAX_LOGIN_FAILURES = 5;
+    /** 账号锁定持续时间 */
+    private static final Duration LOCK_DURATION = Duration.ofMinutes(10);
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -42,15 +50,58 @@ public class UserService {
 
     public LoginResponse login(String username, String password) {
         UserAccount account = userRepository.findByUsername(username)
-                .filter(u -> passwordEncoder.matches(password, u.getPassword()))
                 .orElseThrow(() -> new BizException(401, MessageKeys.AUTH_CREDENTIALS_INVALID));
+
+        LocalDateTime now = SiteZoneTimes.nowUtc();
+        if (account.getLockedUntil() != null && account.getLockedUntil().isAfter(now)) {
+            throw new BizException(401, MessageKeys.AUTH_ACCOUNT_LOCKED,
+                    remainingLockMinutes(account.getLockedUntil(), now));
+        }
+
+        if (!passwordEncoder.matches(password, account.getPassword())) {
+            registerLoginFailure(account, now);
+            throw new BizException(401, MessageKeys.AUTH_CREDENTIALS_INVALID);
+        }
 
         if (!Integer.valueOf(1).equals(account.getStatus())) {
             throw new BizException(401, MessageKeys.AUTH_ACCOUNT_DISABLED);
         }
 
+        clearLoginFailures(account);
+
         return new LoginResponse(jwtUtil.generateToken(account.getUsername()),
                 account.getUsername(), account.getNickname(), effectiveRole(account));
+    }
+
+    /** 累计连续失败次数，达到上限则锁定账号一段时间；失败次数按登录名维度记录在账号上。 */
+    private void registerLoginFailure(UserAccount account, LocalDateTime now) {
+        int attempts = (account.getFailedAttempts() == null ? 0 : account.getFailedAttempts()) + 1;
+        if (attempts >= MAX_LOGIN_FAILURES) {
+            // 锁定后清零计数，解锁后重新享有完整尝试次数
+            account.setFailedAttempts(0);
+            account.setLockedUntil(now.plus(LOCK_DURATION));
+        } else {
+            account.setFailedAttempts(attempts);
+        }
+        userRepository.save(account);
+    }
+
+    /** 登录成功或锁定已过期时清除失败痕迹。 */
+    private void clearLoginFailures(UserAccount account) {
+        boolean dirty = (account.getFailedAttempts() != null && account.getFailedAttempts() != 0)
+                || account.getLockedUntil() != null;
+        if (!dirty) {
+            return;
+        }
+        account.setFailedAttempts(0);
+        account.setLockedUntil(null);
+        userRepository.save(account);
+    }
+
+    /** 剩余锁定分钟数，向上取整且至少 1 分钟。 */
+    private long remainingLockMinutes(LocalDateTime lockedUntil, LocalDateTime now) {
+        long seconds = Duration.between(now, lockedUntil).getSeconds();
+        return Math.max(1, (seconds + 59) / 60);
     }
 
     /**

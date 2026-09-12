@@ -78,7 +78,31 @@ const d: BiDict = {
     en: 'Void the session of plate {plate}? This cannot be undone.'
   },
   voidSuccess: { 'zh-CN': '流水已作废', en: 'Session voided' },
-  void: { 'zh-CN': '作废', en: 'Void' }
+  void: { 'zh-CN': '作废', en: 'Void' },
+
+  /* 结果列与登记收款（与停车流水页口径、文案保持一致） */
+  paidAmount: { 'zh-CN': '累计已支付', en: 'Paid' },
+  payable: { 'zh-CN': '剩余应付', en: 'Payable' },
+  payableTip: { 'zh-CN': '剩余应付 = 应收金额 − 累计已支付 − 待付订单', en: 'Payable = fee due − paid − pending orders' },
+  collect: { 'zh-CN': '收款', en: 'Collect' },
+  collectTitle: { 'zh-CN': '登记收款', en: 'Register payment' },
+  noNeedPay: { 'zh-CN': '该流水当前无需再缴费', en: 'No payment is due for this session' },
+  collectSuccess: { 'zh-CN': '收款成功，已计入流水累计已支付', en: 'Payment credited to the session' },
+  openCollectTip: {
+    'zh-CN': '该流水仍在场，本次应付按「入场 ~ 当前时刻」估算；出场结算时会按真实出场时间重新计费，仅需补缴新产生的金额。',
+    en: 'Session is still open; this order is estimated up to now and will be re-settled at exit with the real exit time.'
+  },
+  quoteReceivable: { 'zh-CN': '当前应收', en: 'Receivable now' },
+  quotePaid: { 'zh-CN': '累计已支付', en: 'Paid' },
+  quotePending: { 'zh-CN': '待付订单', en: 'Pending orders' },
+  quotePayable: { 'zh-CN': '本次应付', en: 'This payment' },
+
+  /* 查询区初始态 */
+  initialTitle: { 'zh-CN': '输入车牌开始查询', en: 'Enter a plate to start' },
+  initialHint: {
+    'zh-CN': '一次列出该车牌的全部未缴停车流水：在场按当前时刻估算，已出场按真实时间结算；免缴与已付清的不计入。',
+    en: 'List all unpaid sessions of the plate at once: ongoing ones estimated up to now, closed ones settled by real exit time. Free and fully-paid ones are excluded.'
+  }
 }
 
 const { t, locale } = useBiText(d)
@@ -542,50 +566,77 @@ onMounted(async () => {
 
 <template>
   <section class="page-stack">
-    <div class="page-card toolbar">
-      <el-select
-        v-model="filters.lotId"
-        :placeholder="t('allLots')"
-        clearable
-        style="width: 200px"
-      >
-        <el-option v-for="item in lots" :key="item.id" :label="item.name" :value="item.id" />
-      </el-select>
-      <el-input
-        v-model="filters.plateNumber"
-        :placeholder="t('platePlaceholder')"
-        clearable
-        style="width: 260px"
-        @keyup.enter="runSearch"
-      />
-      <el-button type="primary" @click="runSearch">{{ t('search') }}</el-button>
-      <el-button @click="handleReset">{{ t('reset') }}</el-button>
+    <div class="page-card query-card">
+      <div class="query-grid">
+        <label class="field">
+          <span class="field-label">{{ t('lot') }}</span>
+          <el-select
+            v-model="filters.lotId"
+            class="field-control"
+            :placeholder="t('allLots')"
+            clearable
+          >
+            <el-option v-for="item in lots" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
+        </label>
+        <label class="field field-plate">
+          <span class="field-label">{{ t('plate') }}</span>
+          <el-input
+            v-model="filters.plateNumber"
+            class="field-control"
+            :placeholder="t('platePlaceholder')"
+            clearable
+            @keyup.enter="runSearch"
+          >
+            <template #prefix>
+              <svg class="field-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
+                <path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </template>
+          </el-input>
+        </label>
+        <div class="query-actions">
+          <el-button type="primary" @click="runSearch">{{ t('search') }}</el-button>
+          <el-button @click="handleReset">{{ t('reset') }}</el-button>
+        </div>
+      </div>
     </div>
 
-    <el-alert :title="t('tip')" type="info" :closable="false" show-icon />
+    <div class="tip-note">
+      <svg class="tip-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+        <path d="M12 11v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        <circle cx="12" cy="7.6" r="1.1" fill="currentColor" />
+      </svg>
+      <p class="tip-text">{{ t('tip') }}</p>
+    </div>
 
-    <div class="page-card">
+    <div class="page-card result-card">
       <template v-if="queried">
         <div v-if="total > 0" class="arrears-summary">
-          <el-tooltip
-            :content="`${plateColorLabel(rows[0]?.plateColor)} · ${t('clickCopy')}`"
-            placement="top"
-          >
-            <span
-              class="plate-badge plate-badge-lg"
-              :style="plateBadgeStyle(rows[0]?.plateColor)"
-              @click="handleCopyPlate(filters.plateNumber.trim())"
+          <div class="summary-plate">
+            <el-tooltip
+              :content="`${plateColorLabel(rows[0]?.plateColor)} · ${t('clickCopy')}`"
+              placement="top"
             >
-              {{ filters.plateNumber.trim() }}
-            </span>
-          </el-tooltip>
-          <div class="summary-meta">
-            <div class="summary-item">
-              <span class="summary-label">{{ t('summaryRecords').replace('{count}', String(total)) }}</span>
+              <span
+                class="plate-badge plate-badge-lg"
+                :style="plateBadgeStyle(rows[0]?.plateColor)"
+                @click="handleCopyPlate(filters.plateNumber.trim())"
+              >
+                {{ filters.plateNumber.trim() }}
+              </span>
+            </el-tooltip>
+            <span class="plate-color-chip">{{ plateColorLabel(rows[0]?.plateColor) }}</span>
+          </div>
+          <div class="summary-stats">
+            <div class="stat">
+              <span class="stat-label">{{ t('summaryRecords').replace('{count}', String(total)) }}</span>
             </div>
-            <div class="summary-item amount">
-              <span class="summary-label">{{ t('summaryAmount') }}</span>
-              <span class="summary-value">{{ feeText(totalAmount) }}</span>
+            <div class="stat stat-amount">
+              <span class="stat-label">{{ t('summaryAmount') }}</span>
+              <span class="stat-value">{{ feeText(totalAmount) }}</span>
             </div>
           </div>
         </div>
@@ -683,7 +734,24 @@ onMounted(async () => {
         </div>
       </template>
 
-      <el-empty v-else :description="t('platePlaceholder')" />
+      <div v-else class="initial-state">
+        <div class="initial-badge">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M4 12.5 5.7 7.9A2.2 2.2 0 0 1 7.8 6.5h8.4a2.2 2.2 0 0 1 2.1 1.4L20 12.5"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <rect x="3.2" y="12.2" width="17.6" height="5.6" rx="1.6" stroke="currentColor" stroke-width="1.8" />
+            <circle cx="7.6" cy="17.8" r="1.5" stroke="currentColor" stroke-width="1.8" />
+            <circle cx="16.4" cy="17.8" r="1.5" stroke="currentColor" stroke-width="1.8" />
+          </svg>
+        </div>
+        <h3 class="initial-title">{{ t('initialTitle') }}</h3>
+        <p class="initial-hint">{{ t('initialHint') }}</p>
+      </div>
     </div>
 
     <el-dialog v-model="editDialogVisible" :title="t('editTitle')" width="480px" destroy-on-close>
@@ -738,6 +806,10 @@ onMounted(async () => {
           {{ t('statusClosed') }}
         </el-tag>
       </div>
+      <div v-if="payQuote" class="pay-amount-panel">
+        <span class="pay-amount-label">{{ t('quotePayable') }}</span>
+        <span class="pay-amount-value">{{ feeText(payQuote.payableYuan) }}</span>
+      </div>
       <p v-if="payRow?.status === 'OPEN'" class="pay-dialog-tip">{{ t('openCollectTip') }}</p>
       <el-descriptions v-if="payQuote" :column="1" size="small" border class="pay-quote-desc">
         <el-descriptions-item :label="t('quoteReceivable')">
@@ -749,9 +821,6 @@ onMounted(async () => {
         <el-descriptions-item :label="t('quotePending')">
           {{ feeText(payQuote.pendingYuan) }}
         </el-descriptions-item>
-        <el-descriptions-item :label="t('quotePayable')">
-          <span class="payable-cell">{{ feeText(payQuote.payableYuan) }}</span>
-        </el-descriptions-item>
       </el-descriptions>
       <template #footer>
         <el-button @click="payDialogVisible = false">{{ t('cancel') }}</el-button>
@@ -762,42 +831,186 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-card {
+  background: #fff;
+  border-radius: var(--fp-radius);
+  box-shadow: var(--fp-shadow-soft);
+  padding: 18px 20px;
+}
+
+/* —— 查询区 —— */
+.query-grid {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+}
+
+.field-plate {
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fp-muted);
+}
+
+.field-control {
+  width: 100%;
+}
+
+.field-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--fp-muted);
+}
+
+.query-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 1px;
+}
+
+/* —— 说明 —— */
+.tip-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--fp-radius-sm);
+  background: var(--fp-teal-soft);
+  border: 1px solid #cbe7e2;
+  color: var(--fp-ink-soft);
+}
+
+.tip-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--fp-teal);
+}
+
+.tip-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* —— 结果汇总 —— */
 .arrears-summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
   padding: 16px 20px;
-  margin-bottom: 14px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #fff1f0, #fff7f6);
-  border: 1px solid #ffccc7;
+  margin-bottom: 16px;
+  border-radius: var(--fp-radius-sm);
+  background: linear-gradient(135deg, #f1faf7 0%, #eef6f4 100%);
+  border: 1px solid #d8ece8;
 }
 
-.summary-meta {
+.summary-plate {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.plate-color-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--fp-line);
+  font-size: 12px;
+  color: var(--fp-ink-soft);
+  white-space: nowrap;
+}
+
+.summary-stats {
   display: flex;
   align-items: flex-end;
   gap: 36px;
 }
 
-.summary-item {
+.stat {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  gap: 2px;
 }
 
-.summary-label {
+.stat-label {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--fp-muted);
 }
 
-.summary-item.amount .summary-value {
+.stat-amount .stat-value {
+  font-family: var(--fp-font-display);
   font-size: 26px;
   font-weight: 700;
-  color: #cf1322;
-  line-height: 1.2;
+  line-height: 1.15;
+  color: var(--fp-danger);
 }
 
+/* —— 初始空态 —— */
+.initial-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 52px 20px;
+  text-align: center;
+}
+
+.initial-badge {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--fp-teal-soft);
+  color: var(--fp-teal-deep);
+}
+
+.initial-badge svg {
+  width: 30px;
+  height: 30px;
+}
+
+.initial-title {
+  margin: 6px 0 0;
+  font-family: var(--fp-font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--fp-ink);
+}
+
+.initial-hint {
+  margin: 0;
+  max-width: 480px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--fp-muted);
+}
+
+/* —— 车牌徽标 / 金额 —— */
 .plate-badge {
   display: inline-flex;
   align-items: center;
@@ -829,25 +1042,64 @@ onMounted(async () => {
 
 .fee-amount {
   font-weight: 600;
-  color: #cf1322;
+  color: var(--fp-danger);
 }
 
 .payable-cell {
   font-weight: 700;
-  color: #d03050;
+  color: var(--fp-danger);
 }
 
+.result-card :deep(.el-table th.el-table__cell) {
+  background: #f6faf9;
+  color: var(--fp-ink-soft);
+  font-weight: 600;
+}
+
+/* —— 登记收款弹窗 —— */
 .pay-plate-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.pay-amount-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  border-radius: var(--fp-radius-sm);
+  background: linear-gradient(135deg, #fff6f6, #fff1f0);
+  border: 1px solid #ffd9d6;
+}
+
+.pay-amount-label {
+  font-size: 12px;
+  color: var(--fp-muted);
+}
+
+.pay-amount-value {
+  font-family: var(--fp-font-display);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--fp-danger);
 }
 
 .pay-quote-desc {
   margin-bottom: 4px;
 }
 
+.pay-dialog-tip {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--fp-ink-soft);
+}
+
+/* —— 表格 / 分页 —— */
 .pager-row {
   display: flex;
   justify-content: flex-end;
@@ -860,12 +1112,5 @@ onMounted(async () => {
   align-items: center;
   column-gap: 12px;
   row-gap: 2px;
-}
-
-.pay-dialog-tip {
-  margin: 0 0 14px;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #606266;
 }
 </style>

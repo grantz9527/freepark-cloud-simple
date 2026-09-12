@@ -47,6 +47,12 @@ public class AlipayConfig {
     @Column(name = "alipay_public_key", columnDefinition = "TEXT")
     private String alipayPublicKey;
 
+    /**
+     * 支付回调地址覆盖：空表示使用系统默认（后台基础地址 + 固定路径）。
+     */
+    @Column(name = "notify_url", length = 512)
+    private String notifyUrl = "";
+
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
@@ -96,6 +102,14 @@ public class AlipayConfig {
 
     public void setAlipayPublicKey(String alipayPublicKey) {
         this.alipayPublicKey = alipayPublicKey;
+    }
+
+    public String getNotifyUrl() {
+        return notifyUrl == null ? "" : notifyUrl;
+    }
+
+    public void setNotifyUrl(String notifyUrl) {
+        this.notifyUrl = notifyUrl == null ? "" : notifyUrl;
     }
 
     public LocalDateTime getUpdatedAt() {

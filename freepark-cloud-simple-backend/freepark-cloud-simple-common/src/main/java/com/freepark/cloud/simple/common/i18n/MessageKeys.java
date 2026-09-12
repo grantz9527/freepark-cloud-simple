@@ -12,6 +12,7 @@ public final class MessageKeys {
     public static final String AUTH_CREDENTIALS_EMPTY = "auth.credentials.empty";
     public static final String AUTH_CREDENTIALS_INVALID = "auth.credentials.invalid";
     public static final String AUTH_ACCOUNT_DISABLED = "auth.account.disabled";
+    public static final String AUTH_ACCOUNT_LOCKED = "auth.account.locked";
     public static final String AUTH_UNAUTHORIZED = "auth.unauthorized";
     public static final String AUTH_FORBIDDEN = "auth.forbidden";
 
@@ -45,6 +46,20 @@ public final class MessageKeys {
     public static final String PARKING_SESSION_HAS_PAYMENTS = "parking.session.hasPayments";
     public static final String PARKING_ORDER_NOT_PAYABLE = "parking.order.notPayable";
     public static final String PARKING_ORDER_BAD_STATE = "parking.order.badState";
+    public static final String PARKING_ORDER_REFUND_INVALID_AMOUNT = "parking.order.refund.invalidAmount";
+    public static final String PARKING_ORDER_REFUND_EXCEEDS = "parking.order.refund.exceeds";
+
+    public static final String PAYMENT_METHOD_NOT_ALLOWED = "payment.methodNotAllowed";
+    public static final String PAYMENT_GATEWAY_UNAVAILABLE = "payment.gatewayUnavailable";
+    public static final String PAYMENT_NOT_FOUND = "payment.notFound";
+    public static final String PAYMENT_BAD_STATE = "payment.badState";
+    public static final String PAYMENT_WECHAT_NOT_CONFIGURED = "payment.wechatNotConfigured";
+    public static final String PAYMENT_WECHAT_OAUTH_REQUIRED = "payment.wechatOauthRequired";
+    public static final String PAYMENT_WECHAT_OAUTH_FAILED = "payment.wechatOauthFailed";
+    public static final String PAYMENT_WECHAT_ORDER_FAILED = "payment.wechatOrderFailed";
+    public static final String PAYMENT_SESSIONS_REQUIRED = "payment.sessionsRequired";
+    public static final String PAYMENT_SESSIONS_INVALID = "payment.sessionsInvalid";
+    public static final String PAY_LOT_STATS_LOT_REQUIRED = "pay.lotStats.lotRequired";
 
     public static final String BILLING_DATE_INVALID_TYPE = "billing.date.invalidType";
     public static final String BILLING_DATE_INVALID_RANGE = "billing.date.invalidRange";
@@ -75,9 +90,12 @@ public final class MessageKeys {
     public static final String SETTINGS_DEFAULT_CURRENCY_NOT_ALLOWED = "settings.defaultCurrencyNotAllowed";
     public static final String SETTINGS_INVALID_PAYMENT_METHOD = "settings.invalidPaymentMethod";
     public static final String SETTINGS_EMPTY_PAYMENT_METHODS = "settings.emptyPaymentMethods";
+    public static final String SETTINGS_INVALID_SITE_BASE_URL = "settings.invalidSiteBaseUrl";
+    public static final String SETTINGS_INVALID_NOTIFY_URL = "settings.invalidNotifyUrl";
 
     public static final String WECHAT_MCH_ID_REQUIRED = "wechat.mchId.required";
     public static final String WECHAT_MCH_ID_INVALID = "wechat.mchId.invalid";
+    public static final String WECHAT_MCH_NAME_INVALID = "wechat.mchName.invalid";
     public static final String WECHAT_MCH_API_KEY_REQUIRED = "wechat.mchApiKey.required";
     public static final String WECHAT_MCH_API_KEY_INVALID = "wechat.mchApiKey.invalid";
     public static final String WECHAT_APP_ID_REQUIRED = "wechat.appId.required";

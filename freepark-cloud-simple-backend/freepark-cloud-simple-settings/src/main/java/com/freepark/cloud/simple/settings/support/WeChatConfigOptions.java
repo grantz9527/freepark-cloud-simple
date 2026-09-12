@@ -14,6 +14,9 @@ public final class WeChatConfigOptions {
     /** 商户号：微信支付商户号（纯数字，一般 8-10 位） */
     public static final int MAX_MCH_ID_LENGTH = 32;
 
+    /** 商户名称 */
+    public static final int MAX_MCH_NAME_LENGTH = 128;
+
     /** 商户 API 密钥：API v3 密钥（32 位字母数字） */
     public static final int MAX_MCH_API_KEY_LENGTH = 64;
 
@@ -27,18 +30,31 @@ public final class WeChatConfigOptions {
     public static final int MAX_SERIAL_NO_LENGTH = 64;
 
     /**
-     * 商户证书序列号：必填项时按十六进制校验（允许带冒号/空格，入库前去除）。
-     * 留空（null/空白）返回 null 表示保持不变。
+     * 商户证书序列号：可空；填写时按十六进制校验（允许带冒号/空格，入库前去除）。
      */
     public static String validateCertSerialNo(String value) {
         if (value == null || value.isBlank()) {
-            return null;
+            return "";
         }
-        String serial = value.replaceAll("(?i)[^0-9a-f]", "");
+        String serial = value.replaceAll("(?i)[^0-9a-f]", "").toUpperCase();
         if (serial.isEmpty() || serial.length() > MAX_SERIAL_NO_LENGTH) {
             throw new BizException(400, MessageKeys.WECHAT_CERT_SERIAL_INVALID);
         }
         return serial;
+    }
+
+    /**
+     * 商户名称可选；超长拒绝。
+     */
+    public static String validateMchName(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String name = value.trim();
+        if (name.length() > MAX_MCH_NAME_LENGTH) {
+            throw new BizException(400, MessageKeys.WECHAT_MCH_NAME_INVALID);
+        }
+        return name;
     }
 
     /**
@@ -84,11 +100,15 @@ public final class WeChatConfigOptions {
     }
 
     /**
-     * 商户号必填且只允许数字。
+     * 商户号可选；填写时只允许数字。空串表示暂未配置。
      */
     public static String validateMchId(String value) {
-        String mchId = normalizeRequired(value, MessageKeys.WECHAT_MCH_ID_REQUIRED);
-        if (!mchId.chars().allMatch(Character::isDigit)) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String mchId = value.trim();
+        if (mchId.length() > MAX_MCH_ID_LENGTH
+                || !mchId.chars().allMatch(Character::isDigit)) {
             throw new BizException(400, MessageKeys.WECHAT_MCH_ID_INVALID);
         }
         return mchId;
@@ -110,10 +130,13 @@ public final class WeChatConfigOptions {
     }
 
     /**
-     * 公众号 AppID 必填且需以 wx 开头。
+     * 公众号 AppID 可选；填写时需以 wx 开头。空串表示暂未配置。
      */
     public static String validateMpAppId(String value) {
-        String appId = normalizeRequired(value, MessageKeys.WECHAT_APP_ID_REQUIRED);
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String appId = value.trim();
         if (!appId.startsWith("wx") || appId.length() > MAX_APP_ID_LENGTH) {
             throw new BizException(400, MessageKeys.WECHAT_APP_ID_INVALID);
         }
@@ -132,12 +155,5 @@ public final class WeChatConfigOptions {
             throw new BizException(400, MessageKeys.WECHAT_APP_SECRET_INVALID);
         }
         return secret;
-    }
-
-    private static String normalizeRequired(String value, String messageKey) {
-        if (value == null || value.isBlank()) {
-            throw new BizException(400, messageKey);
-        }
-        return value.trim();
     }
 }

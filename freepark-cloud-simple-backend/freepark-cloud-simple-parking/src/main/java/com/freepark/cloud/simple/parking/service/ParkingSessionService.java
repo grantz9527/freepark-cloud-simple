@@ -22,6 +22,7 @@ import com.freepark.cloud.simple.parking.entity.ParkingPayStatus;
 import com.freepark.cloud.simple.parking.entity.ParkingSession;
 import com.freepark.cloud.simple.parking.entity.ParkingSessionStatus;
 import com.freepark.cloud.simple.parking.entity.PlateColor;
+import com.freepark.cloud.simple.parking.event.ParkingSessionChangedEvent;
 import com.freepark.cloud.simple.parking.repository.DiscountVehicleRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingOrderRepository;
@@ -31,6 +32,7 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -73,6 +75,7 @@ public class ParkingSessionService {
     private final AdminGuard adminGuard;
     private final BillingSessionChargeService chargeService;
     private final SiteZoneProvider siteZoneProvider;
+    private final ApplicationEventPublisher events;
 
     public ParkingSessionService(ParkingSessionRepository sessions,
                                  ParkingLotRepository lots,
@@ -80,7 +83,8 @@ public class ParkingSessionService {
                                  ParkingOrderRepository orders,
                                  AdminGuard adminGuard,
                                  BillingSessionChargeService chargeService,
-                                 SiteZoneProvider siteZoneProvider) {
+                                 SiteZoneProvider siteZoneProvider,
+                                 ApplicationEventPublisher events) {
         this.sessions = sessions;
         this.lots = lots;
         this.discountVehicles = discountVehicles;
@@ -88,6 +92,7 @@ public class ParkingSessionService {
         this.adminGuard = adminGuard;
         this.chargeService = chargeService;
         this.siteZoneProvider = siteZoneProvider;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -215,23 +220,75 @@ public class ParkingSessionService {
      */
     @Transactional(readOnly = true)
     public PlateFeeQuoteView queryPublicPlateFee(String plateNumber, PlateColor plateColor) {
+        String plate = normalizePublicPlate(plateNumber);
+        PlateFeeSnapshot snapshot = collectPlateFee(plate, plateColor);
+        LocalDateTime now = SiteZoneTimes.nowUtc();
+        List<PlateFeeItemView> items = new ArrayList<>(snapshot.entries().size());
+        BigDecimal total = BigDecimal.ZERO;
+        for (PlateFeeEntry entry : snapshot.entries()) {
+            items.add(toPlateFeeItem(entry.session(), entry.ongoing(), entry.amount(), now));
+            total = total.add(entry.amount());
+        }
+        return new PlateFeeQuoteView(plate, items, total, snapshot.colors());
+    }
+
+    /**
+     * C 端在线缴费：列出指定车牌当前仍需缴纳的流水（在场估算 + 已出场未结），
+     * 口径与 {@link #queryPublicPlateFee} 完全一致（只扣除管理端人工下单的待缴订单），
+     * 返回按流水拆分的可缴金额快照，供缴款下单时逐笔生成订单。
+     */
+    @Transactional(readOnly = true)
+    public List<PayableQuoteView> listPayableQuotes(String plateNumber, PlateColor plateColor) {
+        String plate = normalizePublicPlate(plateNumber);
+        PlateFeeSnapshot snapshot = collectPlateFee(plate, plateColor);
+        List<PayableQuoteView> quotes = new ArrayList<>();
+        for (PlateFeeEntry entry : snapshot.entries()) {
+            if (entry.amount().signum() <= 0) {
+                continue;
+            }
+            quotes.add(new PayableQuoteView(entry.session().getId(), entry.receivable(),
+                    entry.paid(), entry.pending(), entry.amount()));
+        }
+        return quotes;
+    }
+
+    private static String normalizePublicPlate(String plateNumber) {
         String plate = plateNumber == null ? null : plateNumber.trim().toUpperCase();
         if (!StringUtils.hasText(plate)) {
             throw new BizException(400, MessageKeys.COMMON_BAD_REQUEST);
         }
+        return plate;
+    }
+
+    /** 单条流水的 C 端费用口径：金额为正表示仍需缴纳，0 表示当前无需缴纳（在场免费/已缴清）。 */
+    private record PlateFeeEntry(ParkingSession session, boolean ongoing,
+                                 BigDecimal receivable, BigDecimal paid,
+                                 BigDecimal pending, BigDecimal amount) {
+    }
+
+    /** 车牌费用快照：entries 按入场时间倒序（无入场时间的排最后），colors 为该车牌实际存在的颜色清单。 */
+    private record PlateFeeSnapshot(List<PlateFeeEntry> entries, List<String> colors) {
+    }
+
+    /**
+     * 按车牌聚合 C 端费用口径（可选颜色过滤）：
+     * <ul>
+     *   <li>在场（OPEN）全部保留：金额 = 估算应收 − 已缴 − 管理端人工待缴订单（可为 0，用于展示“免费停放中”）；</li>
+     *   <li>已出场（CLOSED）仅保留应收快照 &gt; 0 且未缴清的记录；</li>
+     *   <li>只扣除「管理端人工下单」的待缴订单：C 端在线缴费自身拆出的待缴订单不占用车主可见金额。</li>
+     * </ul>
+     */
+    private PlateFeeSnapshot collectPlateFee(String plate, PlateColor plateColor) {
         List<ParkingSession> matched = sessions.findAll(buildVehicleLatestSpec(null, plate));
         // 该车牌存在的颜色集合（无论当前是否按颜色过滤，均用于前端提示可切换的颜色）
-        Set<PlateColor> colors = EnumSet.noneOf(PlateColor.class);
+        Set<PlateColor> colorSet = EnumSet.noneOf(PlateColor.class);
         for (ParkingSession session : matched) {
             if (session.getPlateColor() != null) {
-                colors.add(session.getPlateColor());
+                colorSet.add(session.getPlateColor());
             }
         }
-
-        List<PlateFeeItemView> items = new ArrayList<>();
-        BigDecimal total = BigDecimal.ZERO;
-        LocalDateTime now = SiteZoneTimes.nowUtc();
-        Map<Long, BigDecimal> pendingBySession = pendingOrdersAmounts(toSessionIds(matched));
+        Map<Long, BigDecimal> pendingBySession = manualPendingOrdersAmounts(toSessionIds(matched));
+        List<PlateFeeEntry> entries = new ArrayList<>();
         for (ParkingSession session : matched) {
             if (plateColor != null && session.getPlateColor() != plateColor) {
                 // 指定了颜色：只统计该颜色流水（历史未记颜色的流水无法确认，一并排除）
@@ -240,17 +297,13 @@ public class ParkingSessionService {
             BigDecimal paid = session.paidAmountOrZero();
             BigDecimal pending = pendingBySession.getOrDefault(session.getId(), BigDecimal.ZERO);
             if (session.getStatus() == ParkingSessionStatus.OPEN) {
-                // 在场展示当前仍需缴纳金额：估算应收 − 已支付 − 待付订单（如已提前缴清则为 0，用于展示“免费停放中”）
                 BigDecimal estimated = computeFee(session);
-                BigDecimal amount = estimated == null ? BigDecimal.ZERO
-                        : maxZero(estimated.subtract(paid).subtract(pending));
-                if (amount.signum() > 0) {
-                    total = total.add(amount);
-                }
-                items.add(toPlateFeeItem(session, true, amount, now));
+                BigDecimal receivable = estimated == null ? BigDecimal.ZERO : estimated;
+                entries.add(new PlateFeeEntry(session, true, receivable, paid, pending,
+                        maxZero(receivable.subtract(paid).subtract(pending))));
             } else if (session.getStatus() == ParkingSessionStatus.CLOSED) {
-                if (session.getPayStatus() == ParkingPayStatus.PAID && paid.signum() == 0) {
-                    // 历史登记已支付（无金额记录）不再展示
+                if (isHistoricallySettled(session)) {
+                    // 历史登记已缴（无金额记录）不再展示
                     continue;
                 }
                 BigDecimal fee = session.getFeeYuan();
@@ -261,19 +314,19 @@ public class ParkingSessionService {
                 if (amount.signum() <= 0) {
                     continue;
                 }
-                total = total.add(amount);
-                items.add(toPlateFeeItem(session, false, amount, now));
+                entries.add(new PlateFeeEntry(session, false, fee, paid, pending, amount));
             }
         }
-        items.sort(Comparator.comparing(PlateFeeItemView::entryText).reversed());
-
+        entries.sort(Comparator.comparing(
+                (PlateFeeEntry entry) -> entry.session().getEntryTime(),
+                Comparator.nullsLast(Comparator.reverseOrder())));
         List<String> colorNames = new ArrayList<>();
         for (PlateColor value : PlateColor.values()) {
-            if (colors.contains(value)) {
+            if (colorSet.contains(value)) {
                 colorNames.add(value.name());
             }
         }
-        return new PlateFeeQuoteView(plate, items, total, colorNames);
+        return new PlateFeeSnapshot(entries, colorNames);
     }
 
     private static final DateTimeFormatter FEE_TIME_FORMATTER =
@@ -287,6 +340,7 @@ public class ParkingSessionService {
             durationText = formatDuration(Duration.between(session.getEntryTime(), end));
         }
         return new PlateFeeItemView(
+                session.getId(),
                 ongoing ? "ONGOING" : "SETTLED",
                 session.getLotName(),
                 session.getPlateColor() == null ? null : session.getPlateColor().name(),
@@ -347,7 +401,7 @@ public class ParkingSessionService {
             return null;
         }
         session.setFeeYuan(computeFee(session));
-        return ParkingSessionView.from(sessions.save(session));
+        return ParkingSessionView.from(saveAndPush(session));
     }
 
     /** 车费查询条件：可选车场 + 车牌精确匹配（忽略大小写）+ 在场或已出场。 */
@@ -436,7 +490,8 @@ public class ParkingSessionService {
                     null, normalizeOptional(request.exitImage()));
             refreshFee(session);
         }
-        return ParkingSessionView.from(sessions.save(session));
+        bindEdgeNode(session, lot);
+        return ParkingSessionView.from(saveAndPush(session));
     }
 
     /**
@@ -492,7 +547,7 @@ public class ParkingSessionService {
             }
         }
         refreshFee(session);
-        return ParkingSessionView.from(sessions.save(session));
+        return ParkingSessionView.from(saveAndPush(session));
     }
 
     /**
@@ -506,12 +561,13 @@ public class ParkingSessionService {
         if (session.getStatus() != ParkingSessionStatus.VOIDED) {
             if (session.paidAmountOrZero().signum() > 0
                     || !orders.findBySessionIdAndStatus(sessionId, ParkingOrderStatus.PENDING).isEmpty()
-                    || !orders.findBySessionIdAndStatus(sessionId, ParkingOrderStatus.PAID).isEmpty()) {
+                    || !orders.findBySessionIdAndStatus(sessionId, ParkingOrderStatus.PAID).isEmpty()
+                    || !orders.findBySessionIdAndStatus(sessionId, ParkingOrderStatus.PARTIAL_REFUND).isEmpty()) {
                 throw new BizException(400, MessageKeys.PARKING_SESSION_HAS_PAYMENTS);
             }
             session.markVoided();
             session.setFeeYuan(null);
-            sessions.save(session);
+            saveAndPush(session);
         }
         return ParkingSessionView.from(session);
     }
@@ -538,7 +594,7 @@ public class ParkingSessionService {
         ParkingSession session = requireSession(sessionId);
         requireRecalculable(session);
         session.setFeeYuan(computeFee(session));
-        return ParkingSessionView.from(sessions.save(session));
+        return ParkingSessionView.from(saveAndPush(session));
     }
 
     /** 校验该流水可作为「重新算费」输入：已出场须有完整出入场区间，在场须有入场时间。 */
@@ -616,7 +672,33 @@ public class ParkingSessionService {
         }
         session.setPaidAmountYuan(session.paidAmountOrZero().add(paidAmount));
         session.syncPayStatusFromMoney();
-        return sessions.save(session);
+        return saveAndPush(session);
+    }
+
+    /**
+     * 订单退款回冲：从流水累计已支付中扣减退款金额（不低于 0），
+     * 已出场流水按剩余已付重新推导支付状态。
+     */
+    @Transactional
+    public ParkingSession applyOrderRefund(Long sessionId, BigDecimal refundAmount) {
+        ParkingSession session = requireSession(sessionId);
+        if (session.getStatus() == ParkingSessionStatus.VOIDED) {
+            throw new BizException(400, MessageKeys.COMMON_BAD_REQUEST);
+        }
+        BigDecimal next = session.paidAmountOrZero().subtract(refundAmount);
+        if (next.signum() < 0) {
+            next = BigDecimal.ZERO;
+        }
+        session.setPaidAmountYuan(next);
+        if (session.getStatus() == ParkingSessionStatus.CLOSED) {
+            if (next.signum() <= 0) {
+                session.setPayStatus(ParkingPayStatus.UNPAID);
+                session.setPayTime(null);
+            } else {
+                session.syncPayStatusFromMoney();
+            }
+        }
+        return saveAndPush(session);
     }
 
     /**
@@ -652,6 +734,28 @@ public class ParkingSessionService {
             result.put((Long) row[0], (BigDecimal) row[1]);
         }
         return result;
+    }
+
+    /**
+     * 批量汇总若干流水「管理端人工下单」的待付订单金额（{@code paymentNo} 为空）：
+     * C 端在线支付自身拆出的待付订单不计入，避免用户中途放弃在线支付导致查费金额凭空减少。
+     */
+    private Map<Long, BigDecimal> manualPendingOrdersAmounts(Collection<Long> sessionIds) {
+        Map<Long, BigDecimal> result = new HashMap<>();
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return result;
+        }
+        List<Long> ids = sessionIds.stream().distinct().toList();
+        for (Object[] row : orders.sumManualAmountGroupBySessionId(ids, ParkingOrderStatus.PENDING)) {
+            result.put((Long) row[0], (BigDecimal) row[1]);
+        }
+        return result;
+    }
+
+    /** 历史已登记支付（无金额记录）：已出场、支付状态为已支付、但累计已支付为 0 的单据，不再计入 C 端欠费展示。 */
+    private static boolean isHistoricallySettled(ParkingSession session) {
+        return session.getPayStatus() == ParkingPayStatus.PAID
+                && session.paidAmountOrZero().signum() == 0;
     }
 
     private static List<Long> toSessionIds(Collection<ParkingSession> sessions) {
@@ -723,6 +827,31 @@ public class ParkingSessionService {
     private ParkingLot requireLot(Long lotId) {
         return lots.findById(lotId)
                 .orElseThrow(() -> new BizException(404, MessageKeys.COMMON_NOT_FOUND));
+    }
+
+    /**
+     * 云端写流水：修订号 +1 后落库，事务提交后经 MQTT 下发到绑定的边缘节点。
+     */
+    private ParkingSession saveAndPush(ParkingSession session) {
+        long next = session.getCloudRevision() == null ? 1L : session.getCloudRevision() + 1;
+        session.setCloudRevision(next);
+        bindEdgeNode(session);
+        ParkingSession saved = sessions.save(session);
+        events.publishEvent(new ParkingSessionChangedEvent(saved.getId()));
+        return saved;
+    }
+
+    private void bindEdgeNode(ParkingSession session, ParkingLot lot) {
+        if (session.getEdgeNodeCode() == null && lot != null && StringUtils.hasText(lot.getEdgeNodeCode())) {
+            session.setEdgeNodeCode(lot.getEdgeNodeCode());
+        }
+    }
+
+    private void bindEdgeNode(ParkingSession session) {
+        if (session.getEdgeNodeCode() != null || session.getLotId() == null) {
+            return;
+        }
+        lots.findById(session.getLotId()).ifPresent(lot -> bindEdgeNode(session, lot));
     }
 
     private ParkingSession requireSession(Long sessionId) {

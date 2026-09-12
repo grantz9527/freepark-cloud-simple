@@ -8,8 +8,8 @@ const d: BiDict = {
   loading: { 'zh-CN': '正在加载配置…', en: 'Loading configuration…' },
   description: {
     'zh-CN':
-      '云端通过 MQTT 与停车系统及边缘计算服务通信：订阅停车系统上报的数据，并按周期将配置发布给其它边缘计算服务，由其同步到本地。',
-    en: 'The cloud communicates via MQTT with parking systems and edge services: it subscribes to reported data and periodically publishes configuration for edge services to sync locally.'
+      '云端通过 MQTT 与停车系统及边缘计算服务通信：订阅停车系统上报的数据，按周期将配置发布给其它边缘计算服务，在用户缴费成功后向对应节点下发开闸指令，并在管理端改停车流水后把快照同步到该节点。',
+    en: 'The cloud communicates via MQTT with parking systems and edge services: it subscribes to reported data, periodically publishes configuration for edge services to sync locally, publishes a gate-open command after a successful payment, and pushes parking-session snapshots after admin or payment writes.'
   },
   scope: {
     'zh-CN': '仅超级管理员可修改边缘计算配置。',
@@ -18,8 +18,8 @@ const d: BiDict = {
   sectionConnection: { 'zh-CN': '连接参数', en: 'Connection' },
   sectionTopics: { 'zh-CN': '主题与周期', en: 'Topics & Interval' },
   sectionTopicsHint: {
-    'zh-CN': '订阅主题接收停车系统上报的数据；配置同步发布主题填写“前缀”，云端会按边缘节点自动拼接出专属主题“{前缀}/{节点编号}”，并把该节点管辖的全部车场配置打包定时下发。',
-    en: 'The subscribe topic receives data reported by parking systems. The config sync publish topic is a prefix: the cloud appends "/<node code>" and delivers that node\u2019s managed lot configurations on schedule.'
+    'zh-CN': '订阅主题接收停车系统上报的数据；配置同步 / 开闸指令发布主题填写“前缀”，云端会按边缘节点自动拼接出专属主题“{前缀}/{节点编号}”。',
+    en: 'The subscribe topic receives data reported by parking systems. Config-sync and gate-command publish topics are prefixes: the cloud appends "/<node code>" for each edge node.'
   },
   enabled: { 'zh-CN': '启用边缘计算接入', en: 'Enable edge computing' },
   enabledHint: {
@@ -42,6 +42,12 @@ const d: BiDict = {
   configSyncPublishTopicHint: {
     'zh-CN': '不允许包含空格或 MQTT 通配符（# / +），末尾的 / 会被自动去掉。',
     en: 'Whitespace and MQTT wildcards (# / +) are not allowed; a trailing / is trimmed automatically.'
+  },
+  commandPublishTopic: { 'zh-CN': '开闸指令发布主题前缀', en: 'Gate command publish topic prefix' },
+  commandPublishTopicPlaceholder: { 'zh-CN': '如 parking/command（云端自动拼接 /节点编号）', en: 'e.g. parking/command (node code appended)' },
+  commandPublishTopicHint: {
+    'zh-CN': '用户端缴费成功后下发开闸；管理端新增/改流水/作废/算费/收退款后下发流水快照。须与本地节点订阅的指令主题前缀一致；留空保存为 parking/command。',
+    en: 'After a successful user payment the cloud publishes a gate-open command. After admin or payment writes to a parking session it also pushes a session snapshot. Both use this prefix and must match the edge subscribe prefix; blank saves as parking/command.'
   },
   sectionHeartbeat: { 'zh-CN': '心跳监控', en: 'Heartbeat Monitoring' },
   sectionHeartbeatHint: {
@@ -86,6 +92,7 @@ interface EdgeMqttConfigView {
   username: string | null
   reportSubscribeTopic: string | null
   configSyncPublishTopic: string | null
+  commandPublishTopic: string | null
   heartbeatSubscribeTopic: string | null
   heartbeatOfflineSeconds: number
   qos: number
@@ -103,6 +110,7 @@ interface SavePayload {
   password: string | null
   reportSubscribeTopic: string | null
   configSyncPublishTopic: string | null
+  commandPublishTopic: string | null
   heartbeatSubscribeTopic: string | null
   heartbeatOfflineSeconds: number
   qos: number
@@ -122,6 +130,7 @@ const username = ref('')
 const password = ref('')
 const reportSubscribeTopic = ref('')
 const configSyncPublishTopic = ref('')
+const commandPublishTopic = ref('')
 const heartbeatSubscribeTopic = ref('')
 const heartbeatOfflineSeconds = ref(90)
 const qos = ref(1)
@@ -134,6 +143,7 @@ const qosOptions = [0, 1, 2]
 // 留空时自动补用的默认主题参数
 const DEFAULT_REPORT_TOPIC = 'parking/report/#'
 const DEFAULT_CONFIG_SYNC_PREFIX = 'cloud/config/sync'
+const DEFAULT_COMMAND_PREFIX = 'parking/command'
 
 function emptyToNull(value: string): string | null {
   return value.trim() === '' ? null : value.trim()
@@ -155,6 +165,7 @@ function buildPayload(): SavePayload {
     password: password.value,
     reportSubscribeTopic: fillTopicDefault(reportSubscribeTopic.value, DEFAULT_REPORT_TOPIC),
     configSyncPublishTopic: fillTopicDefault(configSyncPublishTopic.value, DEFAULT_CONFIG_SYNC_PREFIX),
+    commandPublishTopic: fillTopicDefault(commandPublishTopic.value, DEFAULT_COMMAND_PREFIX),
     // 心跳订阅主题无默认值：留空（null）即关闭心跳监控
     heartbeatSubscribeTopic: emptyToNull(heartbeatSubscribeTopic.value),
     heartbeatOfflineSeconds: heartbeatOfflineSeconds.value,
@@ -172,6 +183,7 @@ function applyView(view: EdgeMqttConfigView): void {
   username.value = view.username ?? ''
   reportSubscribeTopic.value = fillTopicDefault(view.reportSubscribeTopic ?? '', DEFAULT_REPORT_TOPIC)
   configSyncPublishTopic.value = fillTopicDefault(view.configSyncPublishTopic ?? '', DEFAULT_CONFIG_SYNC_PREFIX)
+  commandPublishTopic.value = fillTopicDefault(view.commandPublishTopic ?? '', DEFAULT_COMMAND_PREFIX)
   heartbeatSubscribeTopic.value = view.heartbeatSubscribeTopic ?? ''
   heartbeatOfflineSeconds.value = view.heartbeatOfflineSeconds
   qos.value = view.qos
@@ -336,6 +348,16 @@ onMounted(loadConfig)
               class="field"
             />
             <div class="field-hint">{{ t('configSyncPublishTopicHint') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('commandPublishTopic')">
+            <el-input
+              v-model="commandPublishTopic"
+              :placeholder="t('commandPublishTopicPlaceholder')"
+              maxlength="255"
+              clearable
+              class="field"
+            />
+            <div class="field-hint">{{ t('commandPublishTopicHint') }}</div>
           </el-form-item>
           <el-form-item :label="t('qos')" required>
             <el-select v-model="qos" class="field">

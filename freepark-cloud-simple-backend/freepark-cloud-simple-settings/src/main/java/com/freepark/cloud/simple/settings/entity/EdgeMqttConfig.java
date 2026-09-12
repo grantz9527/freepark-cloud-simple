@@ -59,6 +59,13 @@ public class EdgeMqttConfig {
     @Column(name = "config_sync_publish_topic", length = 255)
     private String configSyncPublishTopic;
 
+    /**
+     * 指令发布主题前缀：缴费开闸、以及管理端改停车流水后的快照，均按
+     * 「{前缀}/{节点编号}」下发。空则运行时回落默认 {@code parking/command}。
+     */
+    @Column(name = "command_publish_topic", length = 255)
+    private String commandPublishTopic;
+
     /** 心跳订阅主题：云端订阅各车场上行心跳（可含 MQTT 通配符；空=不启用心跳监控） */
     @Column(name = "heartbeat_subscribe_topic", length = 255)
     private String heartbeatSubscribeTopic;
@@ -170,6 +177,14 @@ public class EdgeMqttConfig {
 
     public void setConfigSyncPublishTopic(String configSyncPublishTopic) {
         this.configSyncPublishTopic = configSyncPublishTopic;
+    }
+
+    public String getCommandPublishTopic() {
+        return commandPublishTopic;
+    }
+
+    public void setCommandPublishTopic(String commandPublishTopic) {
+        this.commandPublishTopic = commandPublishTopic;
     }
 
     public String getHeartbeatSubscribeTopic() {

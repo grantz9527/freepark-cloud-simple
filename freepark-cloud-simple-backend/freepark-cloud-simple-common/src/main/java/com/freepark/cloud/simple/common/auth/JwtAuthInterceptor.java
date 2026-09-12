@@ -41,13 +41,21 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
         String path = request.getRequestURI();
+        String servletPath = request.getServletPath();
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
         }
-        // 白名单支持 Ant 通配符（如 /api/public/**），不能使用精确 equals
+        // 白名单支持 Ant 通配符（如 /api/public/**）；同时匹配 URI 与 servletPath，避免上下文路径差异
         for (String pattern : excludePaths) {
-            if (PATH_MATCHER.match(pattern, path)) {
+            if (PATH_MATCHER.match(pattern, path) || PATH_MATCHER.match(pattern, servletPath)) {
                 return true;
+            }
+            String context = request.getContextPath();
+            if (context != null && !context.isEmpty() && path.startsWith(context)) {
+                String within = path.substring(context.length());
+                if (PATH_MATCHER.match(pattern, within)) {
+                    return true;
+                }
             }
         }
 

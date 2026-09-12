@@ -31,8 +31,10 @@ public class WebAuthConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new JwtAuthInterceptor(jwtUtil, objectMapper, messageService, excludeList()))
-                .addPathPatterns("/api/**");
+        List<String> excludes = excludeList();
+        registry.addInterceptor(new JwtAuthInterceptor(jwtUtil, objectMapper, messageService, excludes))
+                .addPathPatterns("/api/**")
+                .excludePathPatterns(excludes);
     }
 
     private List<String> excludeList() {

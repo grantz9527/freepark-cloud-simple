@@ -1,9 +1,11 @@
 package com.freepark.cloud.simple.settings.web;
 
 import com.freepark.cloud.simple.common.ApiResult;
+import com.freepark.cloud.simple.common.pay.PublicOriginResolver;
 import com.freepark.cloud.simple.settings.dto.AlipayConfigView;
 import com.freepark.cloud.simple.settings.dto.UpdateAlipayConfigUploadRequest;
 import com.freepark.cloud.simple.settings.service.AlipayConfigService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,14 +23,16 @@ import org.springframework.web.multipart.MultipartFile;
 public class AlipayConfigController {
 
     private final AlipayConfigService configService;
+    private final PublicOriginResolver publicOrigin;
 
-    public AlipayConfigController(AlipayConfigService configService) {
+    public AlipayConfigController(AlipayConfigService configService, PublicOriginResolver publicOrigin) {
         this.configService = configService;
+        this.publicOrigin = publicOrigin;
     }
 
     @GetMapping
-    public ApiResult<AlipayConfigView> get() {
-        return ApiResult.ok(configService.getConfig());
+    public ApiResult<AlipayConfigView> get(HttpServletRequest request) {
+        return ApiResult.ok(configService.getConfig(publicOrigin.alipayNotifyUrl(request)));
     }
 
     /**
@@ -38,10 +42,12 @@ public class AlipayConfigController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResult<AlipayConfigView> update(
             @RequestParam(name = "appId", required = false) String appId,
+            @RequestParam(name = "notifyUrl", required = false) String notifyUrl,
             @RequestPart(name = "appPrivateKeyFile", required = false) MultipartFile appPrivateKeyFile,
-            @RequestPart(name = "alipayPublicKeyFile", required = false) MultipartFile alipayPublicKeyFile) {
-        UpdateAlipayConfigUploadRequest request =
-                new UpdateAlipayConfigUploadRequest(appId, appPrivateKeyFile, alipayPublicKeyFile);
-        return ApiResult.ok(configService.updateConfig(request));
+            @RequestPart(name = "alipayPublicKeyFile", required = false) MultipartFile alipayPublicKeyFile,
+            HttpServletRequest request) {
+        UpdateAlipayConfigUploadRequest body =
+                new UpdateAlipayConfigUploadRequest(appId, notifyUrl, appPrivateKeyFile, alipayPublicKeyFile);
+        return ApiResult.ok(configService.updateConfig(body, publicOrigin.alipayNotifyUrl(request)));
     }
 }

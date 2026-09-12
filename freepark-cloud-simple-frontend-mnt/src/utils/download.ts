@@ -8,7 +8,7 @@ import { getToken } from './auth'
  * @param fallbackName 服务端未返回 Content-Disposition 时的默认文件名
  */
 export async function downloadFile(path: string, fallbackName: string): Promise<void> {
-  const base = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/+$/, '')
+  const base = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '')
   const response = await fetch(`${base}${path}`, {
     headers: {
       Authorization: `Bearer ${getToken()}`

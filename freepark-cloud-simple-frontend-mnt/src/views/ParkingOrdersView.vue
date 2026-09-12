@@ -10,14 +10,14 @@ const d: BiDict = {
   lot: { 'zh-CN': '车场', en: 'Lot' },
   allLots: { 'zh-CN': '全部车场', en: 'All lots' },
   keyword: { 'zh-CN': '关键词', en: 'Keyword' },
-  keywordPlaceholder: { 'zh-CN': '订单号 / 车牌 / 车场', en: 'Order no / plate / lot' },
+  keywordPlaceholder: { 'zh-CN': '订单号 / 缴款单号 / 车牌 / 车场', en: 'Order no / pay no / plate / lot' },
   status: { 'zh-CN': '订单状态', en: 'Order status' },
   allStatus: { 'zh-CN': '全部状态', en: 'All status' },
   search: { 'zh-CN': '查询', en: 'Search' },
   reset: { 'zh-CN': '重置', en: 'Reset' },
   tip: {
-    'zh-CN': '每次收费/缴费请求都会为该停车流水生成一笔订单并记录支付金额。订单金额 = 当前应收 − 流水累计已支付 − 待付订单合计；再次缴费只会收取新产生的金额，不会重复计费。',
-    en: 'Each payment/charge request creates an order for the parking session and records the amount paid. Order amount = current receivable − session paid − pending orders; later payments only collect the newly accrued amount.'
+    'zh-CN': '每次收费/缴费请求都会为该停车流水生成一笔订单并记录支付金额。订单金额 = 当前应收 − 流水累计已支付 − 待付订单合计；再次缴费只会收取新产生的金额，不会重复计费。已支付订单支持全部退款或部分退款，退款金额会从流水累计已支付中回冲。',
+    en: 'Each payment/charge request creates an order for the parking session and records the amount paid. Order amount = current receivable − session paid − pending orders; later payments only collect the newly accrued amount. Paid orders support full or partial refunds, which reverse the credited session paid amount.'
   },
   orderNo: { 'zh-CN': '订单号', en: 'Order No' },
   sessionStatus: { 'zh-CN': '流水状态', en: 'Session' },
@@ -37,13 +37,41 @@ const d: BiDict = {
   orderStatus: { 'zh-CN': '订单状态', en: 'Status' },
   orderPending: { 'zh-CN': '待支付', en: 'Pending' },
   orderPaid: { 'zh-CN': '已支付', en: 'Paid' },
+  orderPartialRefund: { 'zh-CN': '部分退款', en: 'Partially refunded' },
+  orderRefunded: { 'zh-CN': '已退款', en: 'Refunded' },
   orderCancelled: { 'zh-CN': '已取消', en: 'Cancelled' },
+  refunded: { 'zh-CN': '已退金额', en: 'Refunded' },
+  refundedTip: { 'zh-CN': '本单累计已退金额；剩余可退 = 本次应付 − 已退', en: 'Cumulative refunded amount; remaining = order amount − refunded' },
   payTime: { 'zh-CN': '支付时间', en: 'Paid at' },
   createdAt: { 'zh-CN': '下单时间', en: 'Created at' },
   actions: { 'zh-CN': '操作', en: 'Actions' },
   registerPay: { 'zh-CN': '登记收款', en: 'Register payment' },
   cancel: { 'zh-CN': '取消订单', en: 'Cancel' },
   cancelText: { 'zh-CN': '取消', en: 'Cancel' },
+  refund: { 'zh-CN': '退款', en: 'Refund' },
+  refundTitle: { 'zh-CN': '订单退款', en: 'Refund order' },
+  refundMode: { 'zh-CN': '退款方式', en: 'Refund type' },
+  refundFull: { 'zh-CN': '全部退款', en: 'Full refund' },
+  refundPartial: { 'zh-CN': '部分退款', en: 'Partial refund' },
+  refundAmount: { 'zh-CN': '退款金额', en: 'Refund amount' },
+  refundReason: { 'zh-CN': '退款原因', en: 'Reason' },
+  refundReasonPlaceholder: { 'zh-CN': '选填，最多 200 字', en: 'Optional, up to 200 characters' },
+  remainingRefundable: { 'zh-CN': '剩余可退', en: 'Refundable' },
+  refundSubmit: { 'zh-CN': '确认退款', en: 'Confirm refund' },
+  refundSuccess: { 'zh-CN': '退款成功', en: 'Refund completed' },
+  refundInvalidAmount: { 'zh-CN': '请输入大于 0 且不超过剩余可退的金额', en: 'Enter an amount greater than 0 and within the remaining refundable amount' },
+  refundRecords: { 'zh-CN': '退款记录', en: 'Refund records' },
+  refundNo: { 'zh-CN': '退款单号', en: 'Refund No' },
+  refundType: { 'zh-CN': '类型', en: 'Type' },
+  typePartial: { 'zh-CN': '部分退款', en: 'Partial' },
+  typeFull: { 'zh-CN': '全部退款', en: 'Full' },
+  operator: { 'zh-CN': '操作人', en: 'Operator' },
+  refundTime: { 'zh-CN': '退款时间', en: 'Refunded at' },
+  remainingAfter: { 'zh-CN': '剩余可退', en: 'Remaining' },
+  paymentNo: { 'zh-CN': '缴款单号', en: 'Payment no' },
+  paymentNoTip: { 'zh-CN': '线上一次缴清多条流水时共用此缴款单号；管理端人工下单为空', en: 'Shared when one online payment covers several sessions; empty for manual orders' },
+  paymentSessions: { 'zh-CN': '缴费流水', en: 'Sessions paid' },
+  sessionId: { 'zh-CN': '流水 ID', en: 'Session ID' },
   payConfirmTitle: { 'zh-CN': '登记收款', en: 'Register payment' },
   payConfirmMsg: {
     'zh-CN': '确认车牌 {plate} 的订单 {orderNo}（{amount}）已收款吗？收款后金额将累加到关联停车流水的累计已支付。',
@@ -85,9 +113,12 @@ interface LotOption {
   name: string
 }
 
+type OrderStatus = 'PENDING' | 'PAID' | 'PARTIAL_REFUND' | 'REFUNDED' | 'CANCELLED'
+
 interface OrderRow {
   id: number
   orderNo: string
+  paymentNo: string | null
   sessionId: number
   sessionStatus: 'OPEN' | 'CLOSED' | 'VOIDED' | null
   lotId: number
@@ -99,7 +130,11 @@ interface OrderRow {
   paidBeforeYuan: number | null
   pendingBeforeYuan: number | null
   amountYuan: number | null
-  status: 'PENDING' | 'PAID' | 'CANCELLED'
+  refundedYuan: number | null
+  refundableYuan: number | null
+  refundReason: string | null
+  refundTime: string | null
+  status: OrderStatus
   payTime: string | null
   createdAt: string
   updatedAt: string | null
@@ -115,7 +150,7 @@ const loading = ref(false)
 interface Filters {
   lotId: number | undefined
   keyword: string
-  status: '' | 'PENDING' | 'PAID' | 'CANCELLED'
+  status: '' | OrderStatus
   sessionId: number | undefined
 }
 
@@ -138,6 +173,8 @@ let lastValidRange: [string, string] = defaultRange()
 const statusOptions = computed(() => [
   { value: 'PENDING' as const, label: t('orderPending') },
   { value: 'PAID' as const, label: t('orderPaid') },
+  { value: 'PARTIAL_REFUND' as const, label: t('orderPartialRefund') },
+  { value: 'REFUNDED' as const, label: t('orderRefunded') },
   { value: 'CANCELLED' as const, label: t('orderCancelled') }
 ])
 
@@ -199,15 +236,18 @@ function plateBadgeStyle(color: string | null | undefined): { background: string
   return (color && PLATE_STYLES[color]) || PLATE_STYLES.BLUE
 }
 
-function orderTagType(value: OrderRow['status']): 'warning' | 'success' | 'info' {
+function orderTagType(value: OrderRow['status']): 'warning' | 'success' | 'info' | 'danger' {
   if (value === 'PENDING') return 'warning'
   if (value === 'PAID') return 'success'
+  if (value === 'PARTIAL_REFUND') return 'danger'
   return 'info'
 }
 
 function orderLabel(value: OrderRow['status']): string {
   if (value === 'PENDING') return t('orderPending')
   if (value === 'PAID') return t('orderPaid')
+  if (value === 'PARTIAL_REFUND') return t('orderPartialRefund')
+  if (value === 'REFUNDED') return t('orderRefunded')
   return t('orderCancelled')
 }
 
@@ -423,6 +463,132 @@ async function handleCancel(row: OrderRow) {
   }
 }
 
+function refundableOf(row: OrderRow): number {
+  if (row.refundableYuan != null) {
+    return Number(Number(row.refundableYuan).toFixed(2))
+  }
+  const amount = Number(row.amountYuan ?? 0)
+  const refunded = Number(row.refundedYuan ?? 0)
+  return Math.max(0, Number((amount - refunded).toFixed(2)))
+}
+
+function canRefund(row: OrderRow): boolean {
+  return (row.status === 'PAID' || row.status === 'PARTIAL_REFUND') && refundableOf(row) > 0
+}
+
+function hasRefundRecords(row: OrderRow): boolean {
+  return row.status === 'PARTIAL_REFUND' || row.status === 'REFUNDED' || Number(row.refundedYuan ?? 0) > 0
+}
+
+interface RefundRecord {
+  id: number
+  refundNo: string
+  amountYuan: number | null
+  remainingAfterYuan: number | null
+  refundType: 'PARTIAL' | 'FULL'
+  reason: string | null
+  operatorUsername: string | null
+  operatorNickname: string | null
+  createdAt: string
+}
+
+const recordsVisible = ref(false)
+const recordsLoading = ref(false)
+const recordsRow = ref<OrderRow | null>(null)
+const records = ref<RefundRecord[]>([])
+
+function operatorText(row: RefundRecord): string {
+  return row.operatorNickname || row.operatorUsername || '—'
+}
+
+function refundTypeLabel(value: RefundRecord['refundType']): string {
+  return value === 'FULL' ? t('typeFull') : t('typePartial')
+}
+
+async function openRecords(row: OrderRow) {
+  recordsRow.value = row
+  recordsVisible.value = true
+  recordsLoading.value = true
+  try {
+    records.value = await request.get<never, RefundRecord[]>(`/parking-orders/${row.id}/refunds`)
+  } catch (error) {
+    records.value = []
+    ElMessage.error((error as Error)?.message ?? t('loadFailed'))
+  } finally {
+    recordsLoading.value = false
+  }
+}
+
+const sessionsVisible = ref(false)
+const sessionsLoading = ref(false)
+const sessionsRow = ref<OrderRow | null>(null)
+const sessionRows = ref<OrderRow[]>([])
+
+async function openSessions(row: OrderRow) {
+  sessionsRow.value = row
+  sessionsVisible.value = true
+  sessionsLoading.value = true
+  try {
+    sessionRows.value = await request.get<never, OrderRow[]>(`/parking-orders/${row.id}/payment-sessions`)
+  } catch (error) {
+    sessionRows.value = []
+    ElMessage.error((error as Error)?.message ?? t('loadFailed'))
+  } finally {
+    sessionsLoading.value = false
+  }
+}
+
+const refundVisible = ref(false)
+const refundSaving = ref(false)
+const refundRow = ref<OrderRow | null>(null)
+const refundMode = ref<'full' | 'partial'>('full')
+const refundAmount = ref<number>(0)
+const refundReason = ref('')
+
+function openRefund(row: OrderRow) {
+  refundRow.value = row
+  refundMode.value = 'full'
+  refundAmount.value = refundableOf(row)
+  refundReason.value = ''
+  refundVisible.value = true
+}
+
+function handleRefundModeChange(mode: 'full' | 'partial') {
+  const remaining = refundRow.value ? refundableOf(refundRow.value) : 0
+  if (mode === 'full') {
+    refundAmount.value = remaining
+  } else if (!refundAmount.value || refundAmount.value <= 0 || refundAmount.value > remaining) {
+    refundAmount.value = remaining
+  }
+}
+
+async function submitRefund() {
+  const row = refundRow.value
+  if (!row) {
+    return
+  }
+  const remaining = refundableOf(row)
+  const amount = refundMode.value === 'full' ? remaining : Number(Number(refundAmount.value ?? 0).toFixed(2))
+  if (!(amount > 0) || amount > remaining) {
+    ElMessage.warning(t('refundInvalidAmount'))
+    return
+  }
+  refundSaving.value = true
+  try {
+    await request.post(`/parking-orders/${row.id}/refund`, {
+      amountYuan: refundMode.value === 'full' ? null : amount,
+      reason: refundReason.value.trim() || null
+    })
+    ElMessage.success(t('refundSuccess'))
+    refundVisible.value = false
+    loadRows()
+  } catch (error) {
+    ElMessage.error((error as Error)?.message ?? t('reqFailed'))
+  } finally {
+    refundSaving.value = false
+  }
+}
+
 onMounted(async () => {
   currency.load()
   await loadSiteTimezone()
@@ -487,11 +653,12 @@ onMounted(async () => {
             <span class="order-no">{{ row.orderNo }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('sessionStatus')" width="100">
+        <el-table-column :label="t('paymentNo')" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-tag :type="sessionTagType(row.sessionStatus)" effect="plain" disable-transitions>
-              {{ sessionLabel(row.sessionStatus) }}
-            </el-tag>
+            <el-tooltip :content="t('paymentNoTip')" placement="top">
+              <span v-if="row.paymentNo" class="order-no">{{ row.paymentNo }}</span>
+              <span v-else>—</span>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column :label="t('plate')" min-width="140">
@@ -537,6 +704,13 @@ onMounted(async () => {
             </el-tooltip>
           </template>
         </el-table-column>
+        <el-table-column :label="t('refunded')" min-width="115" align="right">
+          <template #default="{ row }">
+            <el-tooltip :content="t('refundedTip')" placement="top">
+              <span>{{ moneyText(row.refundedYuan ?? 0) }}</span>
+            </el-tooltip>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('orderStatus')" min-width="100">
           <template #default="{ row }">
             <el-tag :type="orderTagType(row.status)" disable-transitions>
@@ -554,7 +728,7 @@ onMounted(async () => {
             {{ fmtDateTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column :label="t('actions')" width="150" fixed="right">
+        <el-table-column :label="t('actions')" width="280" fixed="right">
           <template #default="{ row }">
             <div class="actions-cell">
               <el-button v-if="row.status === 'PENDING'" link type="primary" @click="handlePay(row)">
@@ -562,6 +736,15 @@ onMounted(async () => {
               </el-button>
               <el-button v-if="row.status === 'PENDING'" link type="warning" @click="handleCancel(row)">
                 {{ t('cancelText') }}
+              </el-button>
+              <el-button link type="primary" @click="openSessions(row)">
+                {{ t('paymentSessions') }}
+              </el-button>
+              <el-button v-if="canRefund(row)" link type="danger" @click="openRefund(row)">
+                {{ t('refund') }}
+              </el-button>
+              <el-button v-if="hasRefundRecords(row)" link type="primary" @click="openRecords(row)">
+                {{ t('refundRecords') }}
               </el-button>
             </div>
           </template>
@@ -584,6 +767,164 @@ onMounted(async () => {
         />
       </div>
     </div>
+
+    <el-dialog v-model="refundVisible" :title="t('refundTitle')" width="480px" destroy-on-close>
+      <div v-if="refundRow" class="refund-summary">
+        <div class="pay-plate-row">
+          <el-tooltip :disabled="!refundRow.plateColor" :content="plateColorLabel(refundRow.plateColor)" placement="top">
+            <span class="plate-badge" :style="plateBadgeStyle(refundRow.plateColor)">
+              {{ refundRow.plateNumber }}
+            </span>
+          </el-tooltip>
+          <span class="order-no">{{ refundRow.orderNo }}</span>
+        </div>
+        <el-descriptions :column="1" size="small" border>
+          <el-descriptions-item :label="t('amount')">
+            {{ moneyText(refundRow.amountYuan) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('refunded')">
+            {{ moneyText(refundRow.refundedYuan ?? 0) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('remainingRefundable')">
+            <span class="amount-cell">{{ moneyText(refundableOf(refundRow)) }}</span>
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <el-form label-width="96px" class="refund-form">
+        <el-form-item :label="t('refundMode')">
+          <el-radio-group v-model="refundMode" @change="handleRefundModeChange">
+            <el-radio value="full">{{ t('refundFull') }}</el-radio>
+            <el-radio value="partial">{{ t('refundPartial') }}</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item :label="t('refundAmount')">
+          <div class="number-row">
+            <el-input-number
+              v-model="refundAmount"
+              :min="0.01"
+              :max="refundRow ? refundableOf(refundRow) : undefined"
+              :precision="2"
+              :step="0.01"
+              :disabled="refundMode === 'full'"
+              controls-position="right"
+              class="refund-amount-input"
+            />
+            <span class="unit-suffix">{{ moneyUnit }}</span>
+          </div>
+        </el-form-item>
+        <el-form-item :label="t('refundReason')">
+          <el-input
+            v-model="refundReason"
+            type="textarea"
+            :rows="2"
+            maxlength="200"
+            show-word-limit
+            :placeholder="t('refundReasonPlaceholder')"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="refundVisible = false">{{ t('cancelText') }}</el-button>
+        <el-button type="danger" :loading="refundSaving" @click="submitRefund">{{ t('refundSubmit') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-drawer v-model="recordsVisible" :title="t('refundRecords')" size="720px" destroy-on-close>
+      <p v-if="recordsRow" class="records-head">
+        <span class="order-no">{{ recordsRow.orderNo }}</span>
+        <span>{{ recordsRow.plateNumber }}</span>
+      </p>
+      <el-table v-loading="recordsLoading" :data="records" stripe style="width: 100%">
+        <el-table-column :label="t('refundNo')" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="order-no">{{ row.refundNo }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('refundAmount')" min-width="110" align="right">
+          <template #default="{ row }">
+            <span class="amount-cell">{{ moneyText(row.amountYuan) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('remainingAfter')" min-width="110" align="right">
+          <template #default="{ row }">
+            {{ moneyText(row.remainingAfterYuan) }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('refundType')" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.refundType === 'FULL' ? 'info' : 'warning'" disable-transitions>
+              {{ refundTypeLabel(row.refundType) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('refundReason')" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.reason || '—' }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('operator')" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ operatorText(row) }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('refundTime')" min-width="160">
+          <template #default="{ row }">
+            {{ fmtDateTime(row.createdAt) }}
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty :description="t('noData')" />
+        </template>
+      </el-table>
+    </el-drawer>
+
+    <el-drawer v-model="sessionsVisible" :title="t('paymentSessions')" size="760px" destroy-on-close>
+      <p v-if="sessionsRow" class="records-head">
+        <span class="order-no">{{ sessionsRow.paymentNo || sessionsRow.orderNo }}</span>
+        <span>{{ sessionsRow.plateNumber }}</span>
+        <span v-if="sessionRows.length">{{ sessionRows.length }}</span>
+      </p>
+      <el-table v-loading="sessionsLoading" :data="sessionRows" stripe style="width: 100%">
+        <el-table-column :label="t('sessionId')" width="100">
+          <template #default="{ row }">
+            <span class="order-no">{{ row.sessionId }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('amount')" min-width="110" align="right">
+          <template #default="{ row }">
+            <span class="amount-cell">{{ moneyText(row.amountYuan) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('orderStatus')" min-width="100">
+          <template #default="{ row }">
+            <el-tag :type="orderTagType(row.status)" disable-transitions>
+              {{ orderLabel(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('sessionStatus')" width="100">
+          <template #default="{ row }">
+            <el-tag :type="sessionTagType(row.sessionStatus)" effect="plain" disable-transitions>
+              {{ sessionLabel(row.sessionStatus) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="lotName" :label="t('lot')" min-width="140" show-overflow-tooltip />
+        <el-table-column :label="t('entryTime')" min-width="165">
+          <template #default="{ row }">
+            {{ fmtDateTime(row.entryTime) }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('orderNo')" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="order-no">{{ row.orderNo }}</span>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty :description="t('noData')" />
+        </template>
+      </el-table>
+    </el-drawer>
   </section>
 </template>
 
@@ -649,5 +990,43 @@ onMounted(async () => {
 
 .actions-cell :deep(.el-button + .el-button) {
   margin-left: 0;
+}
+
+.pay-plate-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.refund-summary {
+  margin-bottom: 8px;
+}
+
+.refund-form {
+  margin-top: 16px;
+}
+
+.number-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.refund-amount-input {
+  width: 180px;
+}
+
+.unit-suffix {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.records-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  color: #475569;
 }
 </style>

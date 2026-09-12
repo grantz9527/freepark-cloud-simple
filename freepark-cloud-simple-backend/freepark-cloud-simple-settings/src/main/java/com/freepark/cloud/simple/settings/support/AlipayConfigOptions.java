@@ -28,10 +28,13 @@ public final class AlipayConfigOptions {
     private static final String END_PUBLIC_KEY = "-----END PUBLIC KEY-----";
 
     /**
-     * 应用 AppID 必填且只允许数字。
+     * 应用 AppID 可选；填写时只允许数字。空串表示暂未配置。
      */
     public static String validateAppId(String value) {
-        String appId = normalizeRequired(value, MessageKeys.ALIPAY_APP_ID_REQUIRED);
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String appId = value.trim();
         if (appId.length() > MAX_APP_ID_LENGTH
                 || !appId.chars().allMatch(Character::isDigit)) {
             throw new BizException(400, MessageKeys.ALIPAY_APP_ID_INVALID);
@@ -87,12 +90,5 @@ public final class AlipayConfigOptions {
             throw new BizException(400, MessageKeys.ALIPAY_PUBLIC_KEY_INVALID);
         }
         return content;
-    }
-
-    private static String normalizeRequired(String value, String messageKey) {
-        if (value == null || value.isBlank()) {
-            throw new BizException(400, messageKey);
-        }
-        return value.trim();
     }
 }

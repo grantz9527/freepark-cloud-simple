@@ -18,7 +18,8 @@ import java.time.LocalDateTime;
  *
  * <p>字段用途：</p>
  * <ul>
- *   <li>商户号/商户 API 密钥：微信支付收单（API 调用签名）</li>
+ *   <li>商户号/商户名称/商户序列号/商户 API 密钥：微信支付收单（API 调用签名）</li>
+ *   <li>商户 API 证书：请求签名；上传后自动覆盖商户序列号</li>
  *   <li>公众号 AppID/AppSecret：用户缴费前的微信授权登录（OAuth）</li>
  * </ul>
  *
@@ -35,9 +36,21 @@ public class WeChatConfig {
     @Column(length = 32, nullable = false, updatable = false)
     private String id = SINGLETON_ID;
 
+    /**
+     * 历史列：启停已迁到「系统配置 → 收费方式」。
+     * 旧库 ddl-auto=update 不会删列；保留映射并默认 false，避免首次插入报
+     * 「Field 'enabled' doesn't have a default value」。
+     */
+    @Column(name = "enabled", nullable = false)
+    private boolean enabled = false;
+
     /** 微信支付商户号（纯数字） */
     @Column(name = "mch_id", nullable = false, length = 32)
     private String mchId = "";
+
+    /** 商户名称（展示/对账用，可与商户平台登记名称一致） */
+    @Column(name = "mch_name", length = 128)
+    private String mchName = "";
 
     /** 商户 API 密钥：API v3 密钥（32 位字母数字；敏感，响应中不回显） */
     @Column(name = "mch_api_key", length = 64)
@@ -51,9 +64,9 @@ public class WeChatConfig {
     @Column(name = "mch_cert_pem", columnDefinition = "TEXT")
     private String mchCertPem;
 
-    /** 商户 API 证书序列号（上传证书后自动解析，十六进制大写） */
+    /** 商户序列号（商户 API 证书序列号；可手填，上传证书时自动覆盖） */
     @Column(name = "mch_cert_serial_no", length = 64)
-    private String mchCertSerialNo;
+    private String mchCertSerialNo = "";
 
     /** 商户 API 证书颁发者（解析信息，展示用） */
     @Column(name = "mch_cert_issuer", length = 255)
@@ -63,11 +76,14 @@ public class WeChatConfig {
     @Column(name = "mch_cert_valid_until")
     private LocalDate mchCertValidUntil;
 
-    /** 微信支付公钥 ID（商户平台「API 安全 → 微信支付公钥」） */
+    /**
+     * 历史列：微信支付公钥模式已不在配置页采集。
+     * 旧库保留列以免 ddl-auto 丢数据；新流程不再读写。
+     */
     @Column(name = "wechat_pay_public_key_id", length = 64)
     private String wechatPayPublicKeyId;
 
-    /** 微信支付公钥内容（pub_key.pem 文本；敏感，响应中不回显） */
+    /** 历史列：同上，回调若仍存有公钥可继续验签。 */
     @Column(name = "wechat_pay_public_key", columnDefinition = "TEXT")
     private String wechatPayPublicKey;
 
@@ -79,6 +95,12 @@ public class WeChatConfig {
     @Column(name = "mp_app_secret", length = 128)
     private String mpAppSecret;
 
+    /**
+     * 支付回调地址覆盖：空表示使用系统默认（后台基础地址 + 固定路径）。
+     */
+    @Column(name = "notify_url", length = 512)
+    private String notifyUrl = "";
+
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
@@ -86,7 +108,7 @@ public class WeChatConfig {
     }
 
     /**
-     * 供配置服务懒创建默认行（默认关闭、凭据为空，由后续保存动作填充）。
+     * 供配置服务懒创建默认行（凭据为空，由后续保存动作填充）。
      */
     public static WeChatConfig defaults() {
         return new WeChatConfig();
@@ -114,6 +136,14 @@ public class WeChatConfig {
         this.mchId = mchId;
     }
 
+    public String getMchName() {
+        return mchName == null ? "" : mchName;
+    }
+
+    public void setMchName(String mchName) {
+        this.mchName = mchName == null ? "" : mchName;
+    }
+
     public String getMchApiKey() {
         return mchApiKey;
     }
@@ -139,11 +169,11 @@ public class WeChatConfig {
     }
 
     public String getMchCertSerialNo() {
-        return mchCertSerialNo;
+        return mchCertSerialNo == null ? "" : mchCertSerialNo;
     }
 
     public void setMchCertSerialNo(String mchCertSerialNo) {
-        this.mchCertSerialNo = mchCertSerialNo;
+        this.mchCertSerialNo = mchCertSerialNo == null ? "" : mchCertSerialNo;
     }
 
     public String getMchCertIssuer() {
@@ -192,6 +222,14 @@ public class WeChatConfig {
 
     public void setMpAppSecret(String mpAppSecret) {
         this.mpAppSecret = mpAppSecret;
+    }
+
+    public String getNotifyUrl() {
+        return notifyUrl == null ? "" : notifyUrl;
+    }
+
+    public void setNotifyUrl(String notifyUrl) {
+        this.notifyUrl = notifyUrl == null ? "" : notifyUrl;
     }
 
     public LocalDateTime getUpdatedAt() {

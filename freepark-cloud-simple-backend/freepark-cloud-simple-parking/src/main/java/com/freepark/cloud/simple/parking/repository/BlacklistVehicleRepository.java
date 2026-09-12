@@ -1,6 +1,7 @@
 package com.freepark.cloud.simple.parking.repository;
 
 import com.freepark.cloud.simple.parking.entity.BlacklistVehicle;
+import com.freepark.cloud.simple.parking.entity.PlateColor;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
@@ -13,6 +14,9 @@ public interface BlacklistVehicleRepository
     List<BlacklistVehicle> findAllByLotIdOrderByIdAsc(Long lotId);
 
     boolean existsByLotIdAndPlateNumberIgnoreCaseAndEnabledTrue(Long lotId, String plate);
+
+    boolean existsByLotIdAndPlateNumberIgnoreCaseAndPlateColorAndEnabledTrue(
+            Long lotId, String plate, PlateColor plateColor);
 
     boolean existsByLotIdAndPlateNumberIgnoreCase(Long lotId, String plate);
 

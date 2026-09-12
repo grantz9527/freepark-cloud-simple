@@ -125,6 +125,13 @@ public class ParkingSession {
     @Column(name = "edge_session_id", length = 64)
     private String edgeSessionId;
 
+    /**
+     * 云端写修订号：管理端新增/编辑/作废/算费/收退款每成功一次 +1。
+     * 边缘上报若携带更小的修订号视为过期快照，避免把云端改动盖回去。
+     */
+    @Column(name = "cloud_revision")
+    private Long cloudRevision;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -365,6 +372,14 @@ public class ParkingSession {
 
     public void setEdgeSessionId(String edgeSessionId) {
         this.edgeSessionId = edgeSessionId;
+    }
+
+    public Long getCloudRevision() {
+        return cloudRevision;
+    }
+
+    public void setCloudRevision(Long cloudRevision) {
+        this.cloudRevision = cloudRevision;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -8,6 +8,11 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomeView
+    },
+    {
+      path: '/pay/:payNo',
+      name: 'pay-status',
+      component: () => import('../views/PaymentStatusView.vue')
     }
   ]
 })

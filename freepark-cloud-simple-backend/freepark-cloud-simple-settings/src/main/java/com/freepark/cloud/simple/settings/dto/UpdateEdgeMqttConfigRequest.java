@@ -12,6 +12,7 @@ package com.freepark.cloud.simple.settings.dto;
  * @param password                  MQTT 密码（可空；null 表示不修改）
  * @param reportSubscribeTopic      上报数据订阅主题（停车系统发布→云端订阅，可空）
  * @param configSyncPublishTopic    配置同步发布主题（云端发布→边缘节点同步到本地，可空）
+ * @param commandPublishTopic       指令发布主题前缀（缴费开闸 + 云端流水下发；空=默认 parking/command）
  * @param heartbeatSubscribeTopic   上行心跳订阅主题（云端订阅各边缘节点心跳，末段为节点编号，可空；空=不启用心跳监控）
  * @param heartbeatOfflineSeconds   心跳离线判定阈值（秒）
  * @param qos                       消息服务质量（0/1/2）
@@ -27,6 +28,7 @@ public record UpdateEdgeMqttConfigRequest(
         String password,
         String reportSubscribeTopic,
         String configSyncPublishTopic,
+        String commandPublishTopic,
         String heartbeatSubscribeTopic,
         int heartbeatOfflineSeconds,
         int qos,

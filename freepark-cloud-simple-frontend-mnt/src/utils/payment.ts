@@ -10,7 +10,8 @@ interface PaymentMethodMeta {
 
 const PAYMENT_METHOD_META: Record<string, PaymentMethodMeta> = {
   WECHAT_PAY: { zhName: '微信支付', enName: 'WeChat Pay' },
-  ALIPAY_PAY: { zhName: '支付宝支付', enName: 'Alipay' }
+  ALIPAY_PAY: { zhName: '支付宝支付', enName: 'Alipay' },
+  CASH: { zhName: '现金收款', enName: 'Cash' }
 }
 
 /** 收费方式名称：中文界面显示中文名（微信支付…），英文界面显示英文名（WeChat Pay…） */

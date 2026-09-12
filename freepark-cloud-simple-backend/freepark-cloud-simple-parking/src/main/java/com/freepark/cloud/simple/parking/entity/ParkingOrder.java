@@ -79,13 +79,31 @@ public class ParkingOrder {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amountYuan;
 
-    /** 订单状态：PENDING 待支付 / PAID 已支付 / CANCELLED 已取消 */
+    /**
+     * 归集到的 C 端在线支付单号（快照）：一次在线支付按流水拆出的多笔订单共用同一支付单号；
+     * 管理端人工下单为 null。C 端查费不计入在线支付自身的待付订单，避免重复下单时金额被占用。
+     */
+    @Column(name = "payment_no", length = 32)
+    private String paymentNo;
+
+    /** 订单状态：PENDING 待支付 / PAID 已支付 / PARTIAL_REFUND 部分退款 / REFUNDED 已全额退款 / CANCELLED 已取消 */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 16)
+    @Column(nullable = false, length = 32)
     private ParkingOrderStatus status = ParkingOrderStatus.PENDING;
 
     /** 支付时间：登记为「已支付」的时刻 */
     private LocalDateTime payTime;
+
+    /** 累计已退金额（元）：多次部分退款累加；未退为 0 */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal refundedYuan = BigDecimal.ZERO;
+
+    /** 最近一次退款原因（可选） */
+    @Column(length = 200)
+    private String refundReason;
+
+    /** 最近一次退款时间 */
+    private LocalDateTime refundTime;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -209,6 +227,14 @@ public class ParkingOrder {
         this.amountYuan = amountYuan;
     }
 
+    public String getPaymentNo() {
+        return paymentNo;
+    }
+
+    public void setPaymentNo(String paymentNo) {
+        this.paymentNo = paymentNo;
+    }
+
     public ParkingOrderStatus getStatus() {
         return status;
     }
@@ -223,6 +249,43 @@ public class ParkingOrder {
 
     public void setPayTime(LocalDateTime payTime) {
         this.payTime = payTime;
+    }
+
+    public BigDecimal getRefundedYuan() {
+        return refundedYuan;
+    }
+
+    public void setRefundedYuan(BigDecimal refundedYuan) {
+        this.refundedYuan = refundedYuan;
+    }
+
+    public BigDecimal refundedOrZero() {
+        return refundedYuan == null ? BigDecimal.ZERO : refundedYuan;
+    }
+
+    /** 本单剩余可退金额（元）= 应付 − 已退，未支付订单为 0。 */
+    public BigDecimal refundableYuan() {
+        if (status != ParkingOrderStatus.PAID && status != ParkingOrderStatus.PARTIAL_REFUND) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal remaining = amountYuan.subtract(refundedOrZero());
+        return remaining.signum() > 0 ? remaining : BigDecimal.ZERO;
+    }
+
+    public String getRefundReason() {
+        return refundReason;
+    }
+
+    public void setRefundReason(String refundReason) {
+        this.refundReason = refundReason;
+    }
+
+    public LocalDateTime getRefundTime() {
+        return refundTime;
+    }
+
+    public void setRefundTime(LocalDateTime refundTime) {
+        this.refundTime = refundTime;
     }
 
     public LocalDateTime getCreatedAt() {

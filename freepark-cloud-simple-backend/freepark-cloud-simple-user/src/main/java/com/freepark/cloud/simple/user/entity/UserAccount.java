@@ -49,6 +49,13 @@ public class UserAccount {
     @Column(nullable = false)
     private Integer status = 1;
 
+    /** 连续登录失败次数；登录成功后归零 */
+    @Column(nullable = false)
+    private Integer failedAttempts = 0;
+
+    /** 锁定截止时间（UTC 锚点）；null 表示未锁定 */
+    private LocalDateTime lockedUntil;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -113,6 +120,22 @@ public class UserAccount {
 
     public void setStatus(Integer status) {
         this.status = status;
+    }
+
+    public Integer getFailedAttempts() {
+        return failedAttempts;
+    }
+
+    public void setFailedAttempts(Integer failedAttempts) {
+        this.failedAttempts = failedAttempts;
+    }
+
+    public LocalDateTime getLockedUntil() {
+        return lockedUntil;
+    }
+
+    public void setLockedUntil(LocalDateTime lockedUntil) {
+        this.lockedUntil = lockedUntil;
     }
 
     public LocalDateTime getCreatedAt() {

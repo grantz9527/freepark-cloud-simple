@@ -20,7 +20,7 @@ public class JwtUtil {
     private final long expireMillis;
 
     public JwtUtil(@Value("${freepark.jwt.secret}") String secret,
-                   @Value("${freepark.jwt.expire-minutes:120}") long expireMinutes) {
+                   @Value("${freepark.jwt.expire-minutes:720}") long expireMinutes) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expireMillis = expireMinutes * 60 * 1000;
     }

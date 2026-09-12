@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 /**
  * C 端查费明细项：一条在停（ONGOING）或历史未结（SETTLED）的停车记录。
  *
+ * @param sessionId    停车流水 ID，供勾选指定记录缴费
  * @param type         ONGOING 在场 / SETTLED 已出场未结
  * @param lotName      车场名称（快照，可能为空）
  * @param plateColor   车牌颜色枚举名（BLUE/GREEN/…）；记录缺失为 null
@@ -15,6 +16,7 @@ import java.math.BigDecimal;
  *                     SETTLED 为出场结算的应收快照（仅未付清且大于 0 的记录）
  */
 public record PlateFeeItemView(
+        Long sessionId,
         String type,
         String lotName,
         String plateColor,

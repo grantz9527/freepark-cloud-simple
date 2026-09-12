@@ -104,6 +104,12 @@ const router = createRouter({
           meta: { titleKey: 'menu.parkingOrders' }
         },
         {
+          path: 'parking/refunds',
+          name: 'parking-refunds',
+          component: () => import('../views/ParkingRefundsView.vue'),
+          meta: { titleKey: 'menu.parkingRefunds' }
+        },
+        {
           path: 'parking/discount-vehicles',
           name: 'discount-vehicles',
           component: () => import('../views/DiscountVehiclesView.vue'),
@@ -114,6 +120,24 @@ const router = createRouter({
           name: 'vehicle-fee-query',
           component: () => import('../views/FeeQueryView.vue'),
           meta: { titleKey: 'menu.vehicleFeeQuery' }
+        },
+        {
+          path: 'payment/records',
+          name: 'pay-records',
+          component: () => import('../views/PayRecordsView.vue'),
+          meta: { titleKey: 'menu.payRecords' }
+        },
+        {
+          path: 'payment/global-stats',
+          name: 'pay-global-stats',
+          component: () => import('../views/PayGlobalStatsView.vue'),
+          meta: { titleKey: 'menu.payGlobalStats' }
+        },
+        {
+          path: 'payment/lot-stats',
+          name: 'pay-lot-stats',
+          component: () => import('../views/PayLotStatsView.vue'),
+          meta: { titleKey: 'menu.payLotStats' }
         },
         {
           path: 'billing/general-rules',

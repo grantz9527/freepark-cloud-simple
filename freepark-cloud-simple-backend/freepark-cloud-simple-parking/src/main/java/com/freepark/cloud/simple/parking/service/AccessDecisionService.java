@@ -11,6 +11,7 @@ import com.freepark.cloud.simple.parking.entity.LotType;
 import com.freepark.cloud.simple.parking.entity.ParkingLane;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.entity.PatternAllowlist;
+import com.freepark.cloud.simple.parking.entity.PlateColor;
 import com.freepark.cloud.simple.parking.repository.BlacklistVehicleRepository;
 import com.freepark.cloud.simple.parking.repository.InternalVehicleRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingLaneRepository;
@@ -65,12 +66,13 @@ public class AccessDecisionService {
         requireLane(lotId, request.laneId());
 
         String plate = request.plateNumber().trim().toUpperCase();
+        PlateColor color = request.plateColor();
         boolean isEntry = request.direction() != null
                 && request.direction().equalsIgnoreCase(AccessDirection.ENTRANCE.name());
         LocalDateTime now = SiteZoneTimes.nowUtc();
 
-        boolean whitelisted = whitelistVehicles.existsActiveAt(lotId, plate, now);
-        boolean blacklisted = blacklistVehicles.existsByLotIdAndPlateNumberIgnoreCaseAndEnabledTrue(lotId, plate);
+        boolean whitelisted = whitelistVehicles.existsActiveAt(lotId, plate, color, now);
+        boolean blacklisted = isListedBlack(lotId, plate, color);
         boolean interceptBlacklisted = isEntry ? lot.isEntryInterceptBlacklist() : lot.isExitInterceptBlacklist();
         boolean patternMatched = matchesPattern(lotId, plate);
 
@@ -89,7 +91,7 @@ public class AccessDecisionService {
         // 内部车场入场：必须已登记内部车辆。
         if (isEntry
                 && lot.getLotType() == LotType.INTERNAL
-                && !internalVehicles.existsByLotIdAndPlateNumberIgnoreCaseAndEnabledTrue(lotId, plate)) {
+                && !isListedInternal(lotId, plate, color)) {
             return AccessDecisionView.intercepted("not_internal_vehicle");
         }
 
@@ -106,6 +108,22 @@ public class AccessDecisionService {
         }
 
         return AccessDecisionView.allowed("");
+    }
+
+    private boolean isListedBlack(Long lotId, String plate, PlateColor color) {
+        if (color == null) {
+            return blacklistVehicles.existsByLotIdAndPlateNumberIgnoreCaseAndEnabledTrue(lotId, plate);
+        }
+        return blacklistVehicles.existsByLotIdAndPlateNumberIgnoreCaseAndPlateColorAndEnabledTrue(
+                lotId, plate, color);
+    }
+
+    private boolean isListedInternal(Long lotId, String plate, PlateColor color) {
+        if (color == null) {
+            return internalVehicles.existsByLotIdAndPlateNumberIgnoreCaseAndEnabledTrue(lotId, plate);
+        }
+        return internalVehicles.existsByLotIdAndPlateNumberIgnoreCaseAndPlateColorAndEnabledTrue(
+                lotId, plate, color);
     }
 
     private boolean matchesPattern(Long lotId, String plate) {

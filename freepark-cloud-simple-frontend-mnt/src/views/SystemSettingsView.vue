@@ -16,6 +16,33 @@ const d: BiDict = {
   languageZh: { 'zh-CN': '简体中文', en: 'Simplified Chinese' },
   languageEn: { 'zh-CN': '英文', en: 'English' },
   timezone: { 'zh-CN': '时区', en: 'Timezone' },
+  site: { 'zh-CN': '公网地址', en: 'Public URLs' },
+  siteHint: {
+    'zh-CN': '后台与用户端可分开部署。填 http:// 或 https:// 地址即可，可带部署子路径（如 /fangzhi、/freepark-user）。查询参数、# 和尾斜杠会自动去掉。微信要求支付回调为公网 HTTPS。',
+    en: 'Admin API and user site may be hosted separately. Use http:// or https://, optional subpath (e.g. /fangzhi, /freepark-user). Query, hash and trailing slash are stripped on save. WeChat requires a public HTTPS notify URL.'
+  },
+  adminBaseUrl: { 'zh-CN': '后台基础地址', en: 'Admin base URL' },
+  adminBaseUrlPlaceholder: {
+    'zh-CN': '例如 https://cloud.example.com 或 https://cloud.example.com/fangzhi',
+    en: 'e.g. https://cloud.example.com or https://cloud.example.com/fangzhi'
+  },
+  adminBaseUrlHint: {
+    'zh-CN': '用于拼接微信 / 支付宝支付异步回调。可含网关前缀。留空则按当前访问 Host 推断。',
+    en: 'Used to build WeChat / Alipay payment notify URLs. May include a gateway prefix. Leave blank to infer from the current request host.'
+  },
+  userBaseUrl: { 'zh-CN': '用户端基础地址', en: 'User base URL' },
+  userBaseUrlPlaceholder: {
+    'zh-CN': '例如 https://pay.example.com 或 https://pay.example.com/freepark-user',
+    en: 'e.g. https://pay.example.com or https://pay.example.com/freepark-user'
+  },
+  userBaseUrlHint: {
+    'zh-CN': '用于用户端首页、缴费结果页与支付同步跳回。可含前端部署子路径。留空则回落后台基础地址。',
+    en: 'Used for the user home page, payment result page, and channel return URL. May include the frontend subpath. Leave blank to fall back to the admin base URL.'
+  },
+  wechatNotifyPreview: { 'zh-CN': '微信支付回调', en: 'WeChat Pay notify' },
+  alipayNotifyPreview: { 'zh-CN': '支付宝支付回调', en: 'Alipay notify' },
+  userSitePreview: { 'zh-CN': '用户端首页', en: 'User home' },
+  userPayPreview: { 'zh-CN': '用户端缴费页', en: 'User payment page' },
   plateRegion: { 'zh-CN': '车牌版式（区域）', en: 'Plate style (region)' },
   plateRegionHint: {
     'zh-CN': '选择该站点车牌的默认格式，用户端查询页将按此区域渲染车牌输入交互。',
@@ -107,8 +134,19 @@ const d: BiDict = {
     'zh-CN': '至少保留一种收费方式',
     en: 'Keep at least one payment method'
   },
+  userPayMode: { 'zh-CN': '用户端缴费范围', en: 'User payment scope' },
+  userPayModeHint: {
+    'zh-CN': '强制全部支付：车主必须一次缴清该车牌当前全部欠费。允许选择指定订单：车主可勾选要缴的停车记录。',
+    en: 'Pay all: the driver must settle every unpaid record for the plate. Select records: the driver can choose which sessions to pay.'
+  },
+  userPayForceAll: { 'zh-CN': '强制全部支付', en: 'Pay all records' },
+  userPaySelectable: { 'zh-CN': '允许选择指定订单', en: 'Allow selecting records' },
   atLeastOne: { 'zh-CN': '至少保留一种允许的车牌颜色', en: 'Keep at least one allowed plate color' },
   saved: { 'zh-CN': '配置已保存', en: 'Settings saved' },
+  invalidSiteBaseUrl: {
+    'zh-CN': '后台/用户端基础地址须为 http:// 或 https:// 地址，可带 /fangzhi、/freepark-user 这类子路径',
+    en: 'Admin / user base URL must be http:// or https://, and may include a subpath such as /fangzhi'
+  },
   save: { 'zh-CN': '保存配置', en: 'Save settings' },
   saving: { 'zh-CN': '保存中…', en: 'Saving…' },
   loadFailed: { 'zh-CN': '加载配置失败，请重试', en: 'Failed to load settings. Try again.' },
@@ -121,12 +159,15 @@ const { t, locale } = useBiText(d)
 interface SystemSettingsData {
   defaultLocale: string
   timezone: string
+  adminBaseUrl: string
+  userBaseUrl: string
   plateRegion: string
   defaultPlateColor: string
   allowedPlateColors: string[]
   defaultCurrency: string
   allowedCurrencies: string[]
   allowedPaymentMethods: string[]
+  forcePayAll: boolean
   supportedLocales: string[]
   supportedTimezones: string[]
   supportedPlateRegions: string[]
@@ -142,12 +183,15 @@ const data = ref<SystemSettingsData | null>(null)
 
 const defaultLocale = ref('zh-CN')
 const timezone = ref('Asia/Shanghai')
+const adminBaseUrl = ref('')
+const userBaseUrl = ref('')
 const plateRegion = ref('CN')
 const defaultPlateColor = ref('BLUE')
 const allowedPlateColors = ref<string[]>([])
 const defaultCurrency = ref('CNY')
 const allowedCurrencies = ref<string[]>([])
 const allowedPaymentMethods = ref<string[]>([])
+const forcePayAll = ref(true)
 const supportedLocales = ref<string[]>([])
 const supportedTimezones = ref<string[]>([])
 const supportedPlateRegions = ref<string[]>([])
@@ -260,6 +304,47 @@ watch(allowedCurrencies, (codes) => {
     defaultCurrency.value = codes[0]
   }
 })
+
+function normalizedSiteBase(value: string): string {
+  const raw = value.trim().replace(/\s+/g, '')
+  if (!raw) return ''
+  try {
+    const url = new URL(raw.includes('://') ? raw : `https://${raw}`)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return ''
+    const path = url.pathname.replace(/\/+$/, '')
+    const suffix = !path || path === '/' ? '' : path
+    return `${url.protocol}//${url.host}${suffix}`
+  } catch {
+    return ''
+  }
+}
+
+const wechatNotifyPreview = computed(() => {
+  const base = normalizedSiteBase(adminBaseUrl.value)
+  return base ? `${base}/api/public/payment/wechat/notify` : ''
+})
+
+const alipayNotifyPreview = computed(() => {
+  const base = normalizedSiteBase(adminBaseUrl.value)
+  return base ? `${base}/api/public/payment/alipay/notify` : ''
+})
+
+const effectiveUserBase = computed(() => {
+  return normalizedSiteBase(userBaseUrl.value) || normalizedSiteBase(adminBaseUrl.value)
+})
+
+const userSitePreview = computed(() => {
+  const base = effectiveUserBase.value
+  return base ? `${base}/` : ''
+})
+
+const userPayPreview = computed(() => {
+  const base = effectiveUserBase.value
+  return base ? `${base}/pay/{payNo}` : ''
+})
+
+const hasAdminPreview = computed(() => Boolean(wechatNotifyPreview.value || alipayNotifyPreview.value))
+const hasUserPreview = computed(() => Boolean(userSitePreview.value || userPayPreview.value))
 
 function currencyName(code: string): string {
   return currencyNameOf(code, locale.value)
@@ -379,12 +464,15 @@ async function loadSettings(): Promise<void> {
     const view = data.value
     defaultLocale.value = view.defaultLocale
     timezone.value = view.timezone
+    adminBaseUrl.value = view.adminBaseUrl ?? ''
+    userBaseUrl.value = view.userBaseUrl ?? ''
     plateRegion.value = view.plateRegion ?? 'CN'
     defaultPlateColor.value = view.defaultPlateColor
     allowedPlateColors.value = [...view.allowedPlateColors]
     defaultCurrency.value = view.defaultCurrency
     allowedCurrencies.value = [...view.allowedCurrencies]
     allowedPaymentMethods.value = [...view.allowedPaymentMethods]
+    forcePayAll.value = view.forcePayAll !== false
     supportedLocales.value = [...view.supportedLocales]
     supportedTimezones.value = [...view.supportedTimezones]
     supportedPlateRegions.value = [...view.supportedPlateRegions]
@@ -412,26 +500,46 @@ async function handleSave(): Promise<void> {
     ElMessage.warning(t('atLeastOnePaymentMethod'))
     return
   }
+  const admin = adminBaseUrl.value.trim()
+    ? normalizedSiteBase(adminBaseUrl.value)
+    : ''
+  const user = userBaseUrl.value.trim()
+    ? normalizedSiteBase(userBaseUrl.value)
+    : ''
+  if (adminBaseUrl.value.trim() && !admin) {
+    ElMessage.warning(t('invalidSiteBaseUrl'))
+    return
+  }
+  if (userBaseUrl.value.trim() && !user) {
+    ElMessage.warning(t('invalidSiteBaseUrl'))
+    return
+  }
   saving.value = true
   try {
     const view = await request.put<never, SystemSettingsData>('/system/settings', {
       defaultLocale: defaultLocale.value,
       timezone: timezone.value,
+      adminBaseUrl: admin,
+      userBaseUrl: user,
       plateRegion: plateRegion.value,
       defaultPlateColor: defaultPlateColor.value,
       allowedPlateColors: allowedPlateColors.value,
       defaultCurrency: defaultCurrency.value,
       allowedCurrencies: allowedCurrencies.value,
-      allowedPaymentMethods: allowedPaymentMethods.value
+      allowedPaymentMethods: allowedPaymentMethods.value,
+      forcePayAll: forcePayAll.value
     })
     defaultLocale.value = view.defaultLocale
     timezone.value = view.timezone
+    adminBaseUrl.value = view.adminBaseUrl ?? ''
+    userBaseUrl.value = view.userBaseUrl ?? ''
     plateRegion.value = view.plateRegion ?? 'CN'
     defaultPlateColor.value = view.defaultPlateColor
     allowedPlateColors.value = [...view.allowedPlateColors]
     defaultCurrency.value = view.defaultCurrency
     allowedCurrencies.value = [...view.allowedCurrencies]
     allowedPaymentMethods.value = [...view.allowedPaymentMethods]
+    forcePayAll.value = view.forcePayAll !== false
     updatedAt.value = view.updatedAt
     ElMessage.success(t('saved'))
   } catch (error) {
@@ -490,6 +598,52 @@ onMounted(loadSettings)
           </el-form-item>
         </div>
         <p class="group-hint">{{ t('plateRegionHint') }}</p>
+
+        <el-divider />
+
+        <h3 class="group-title">{{ t('site') }}</h3>
+        <p class="group-hint">{{ t('siteHint') }}</p>
+        <el-form-item :label="t('adminBaseUrl')">
+          <el-input
+            v-model="adminBaseUrl"
+            :placeholder="t('adminBaseUrlPlaceholder')"
+            maxlength="255"
+            clearable
+            class="field"
+          />
+          <div class="field-hint">{{ t('adminBaseUrlHint') }}</div>
+        </el-form-item>
+        <div v-if="hasAdminPreview" class="notify-preview">
+          <div class="preview-row">
+            <span class="preview-label">{{ t('wechatNotifyPreview') }}</span>
+            <code class="preview-url">{{ wechatNotifyPreview }}</code>
+          </div>
+          <div class="preview-row">
+            <span class="preview-label">{{ t('alipayNotifyPreview') }}</span>
+            <code class="preview-url">{{ alipayNotifyPreview }}</code>
+          </div>
+        </div>
+
+        <el-form-item :label="t('userBaseUrl')">
+          <el-input
+            v-model="userBaseUrl"
+            :placeholder="t('userBaseUrlPlaceholder')"
+            maxlength="255"
+            clearable
+            class="field"
+          />
+          <div class="field-hint">{{ t('userBaseUrlHint') }}</div>
+        </el-form-item>
+        <div v-if="hasUserPreview" class="notify-preview">
+          <div class="preview-row">
+            <span class="preview-label">{{ t('userSitePreview') }}</span>
+            <code class="preview-url">{{ userSitePreview }}</code>
+          </div>
+          <div class="preview-row">
+            <span class="preview-label">{{ t('userPayPreview') }}</span>
+            <code class="preview-url">{{ userPayPreview }}</code>
+          </div>
+        </div>
 
         <el-divider />
 
@@ -588,6 +742,14 @@ onMounted(loadSettings)
           </div>
         </div>
 
+        <el-form-item :label="t('userPayMode')" class="pay-mode-item">
+          <el-radio-group v-model="forcePayAll">
+            <el-radio :value="true">{{ t('userPayForceAll') }}</el-radio>
+            <el-radio :value="false">{{ t('userPaySelectable') }}</el-radio>
+          </el-radio-group>
+          <div class="field-hint">{{ t('userPayModeHint') }}</div>
+        </el-form-item>
+
         <div class="form-footer">
           <div class="footer-meta">
             <span v-if="updatedAt" class="meta">
@@ -646,6 +808,50 @@ onMounted(loadSettings)
 
 .field {
   width: 100%;
+}
+
+.field-hint {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--fp-muted);
+}
+
+.pay-mode-item :deep(.el-radio-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.notify-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: -4px 0 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--fp-line, #dcdfe6);
+  border-radius: var(--fp-radius, 6px);
+  background: var(--fp-surface-soft, rgba(0, 0, 0, 0.02));
+}
+
+.preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+}
+
+.preview-label {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  color: var(--fp-muted);
+}
+
+.preview-url {
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.78rem;
+  word-break: break-all;
+  color: var(--fp-text, #2f3640);
 }
 
 .colors-block {

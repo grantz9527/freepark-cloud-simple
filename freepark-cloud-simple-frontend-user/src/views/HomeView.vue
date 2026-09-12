@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   fetchSiteSettings,
   normalizePlate,
   queryPlateFee,
+  type PaymentOrder,
   type PlateFeeItem,
   type PlateFeeQuote
 } from '../api/client'
 import PlateInput from '../components/PlateInput.vue'
+import PaySheet from '../components/PaySheet.vue'
 import {
   localeButtonText,
   localeFromSite,
@@ -26,20 +28,36 @@ import {
   plateInkColor
 } from '../plateColor'
 import { regionDefaultTone } from '../plateRegion'
+import { detectPayClientEnv } from '../payEnv'
 
 const route = useRoute()
+const router = useRouter()
+
+/** URL 携带的车牌（扫码 / 分享链接 / 缴费返回）；无则返回空串 */
+function plateFromUrl(): string {
+  const raw = route.query.plate
+  return normalizePlate(Array.isArray(raw) ? raw[0] ?? '' : (raw ?? ''))
+}
 
 /** search：输入查询页；result：结果页 */
-const view = ref<'search' | 'result'>('search')
+const view = ref<'search' | 'result'>(plateFromUrl() ? 'result' : 'search')
 const plateInput = ref('')
 const loading = ref(false)
 const error = ref('')
 const quote = ref<PlateFeeQuote | null>(null)
 const paySheetOpen = ref(false)
+/** 系统配置中开放的缴费方式（WECHAT_PAY / ALIPAY_PAY） */
+const paymentMethods = ref<string[]>([])
+/** 系统配置：true 强制缴清全部欠费；false 允许勾选指定停车记录 */
+const forcePayAll = ref(true)
+/** 勾选缴费时选中的停车流水 ID */
+const selectedSessionIds = ref<number[]>([])
 /** 手动指定车牌颜色；null = 自动（不按颜色过滤） */
 const manualColor = ref<string | null>(null)
 /** 车牌版式区域（云端 system_settings.plateRegion），拉取前按 CN 渲染 */
 const region = ref('CN')
+const userBaseUrl = ref('')
+const wechatMpAppId = ref('')
 const isCn = computed(() => region.value === 'CN')
 /** 金额币种（云端 system_settings.defaultCurrency），拉取前按 CNY */
 const currency = ref('CNY')
@@ -137,6 +155,29 @@ const settledItems = computed<PlateFeeItem[]>(() =>
   quote.value?.items.filter((i) => i.type === 'SETTLED') ?? []
 )
 const hasDue = computed<boolean>(() => (quote.value?.totalAmount ?? 0) > 0)
+const payableItems = computed<PlateFeeItem[]>(() =>
+  (quote.value?.items ?? []).filter((item) => item.amount > 0 && Number(item.sessionId) > 0)
+)
+const canSelectPay = computed<boolean>(() => !forcePayAll.value && payableItems.value.length > 0)
+const selectedAmount = computed<number>(() => {
+  const picked = new Set(selectedSessionIds.value)
+  return payableItems.value
+    .filter((item) => picked.has(item.sessionId))
+    .reduce((sum, item) => sum + item.amount, 0)
+})
+const payAmount = computed<number>(() =>
+  forcePayAll.value ? (quote.value?.totalAmount ?? 0) : selectedAmount.value
+)
+const payItems = computed<PlateFeeItem[]>(() => {
+  if (forcePayAll.value) return payableItems.value
+  const picked = new Set(selectedSessionIds.value)
+  return payableItems.value.filter((item) => picked.has(item.sessionId))
+})
+const allPayableSelected = computed<boolean>(
+  () =>
+    payableItems.value.length > 0 &&
+    payableItems.value.every((item) => selectedSessionIds.value.includes(item.sessionId))
+)
 /** 有在场记录但当前免费/未产生费用 */
 const ongoingFree = computed<boolean>(
   () =>
@@ -188,7 +229,11 @@ async function applySiteSettings() {
   try {
     const settings = await fetchSiteSettings()
     region.value = settings.plateRegion || 'CN'
+    wechatMpAppId.value = settings.wechatMpAppId || ''
+    userBaseUrl.value = settings.userBaseUrl || ''
     currency.value = settings.defaultCurrency || 'CNY'
+    paymentMethods.value = settings.allowedPaymentMethods ?? []
+    forcePayAll.value = settings.forcePayAll !== false
     setLocaleIfUnset(localeFromSite(settings.defaultLocale))
   } catch {
     // 拉取失败保持 CN/CNY 兜底，不影响查询主流程
@@ -206,6 +251,7 @@ async function runQuery(plate: string, color: string | null = manualColor.value)
     quote.value = await queryPlateFee(plate, color ?? undefined)
     plateInput.value = plate
     addRecent(plate, color)
+    syncSelection(sessionIdsFromQuery())
     view.value = 'result'
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('err.failed')
@@ -234,6 +280,7 @@ async function switchColor(code: string | null) {
 function goBackToSearch() {
   view.value = 'search'
   quote.value = null
+  selectedSessionIds.value = []
   error.value = ''
   paySheetOpen.value = false
 }
@@ -244,12 +291,49 @@ async function autoQueryFromUrl() {
   const plate = normalizePlate(Array.isArray(plateRaw) ? plateRaw[0] ?? '' : (plateRaw ?? ''))
   if (!plate) return
   plateInput.value = plate
-  if (validatePlate()) return
+  const invalid = validatePlate()
+  if (invalid) {
+    // 车牌格式不合法：退回查询页并提示，避免停在结果页占位
+    error.value = invalid
+    view.value = 'search'
+    return
+  }
   const colorRaw = route.query.plateColor
   const color = Array.isArray(colorRaw) ? colorRaw[0] ?? '' : (colorRaw ?? '')
   const known = PLATE_COLOR_META.find((m) => m.code === color)
   if (known) manualColor.value = known.code
   await runQuery(plate, known ? known.code : null)
+  maybeAutoOpenPay()
+}
+
+function shouldAutoOpenPay(): boolean {
+  const env = detectPayClientEnv()
+  if (env !== 'wechat' && env !== 'alipay') return false
+  const flag = String(Array.isArray(route.query.openPay) ? route.query.openPay[0] : route.query.openPay ?? '')
+  if (flag === '1' || flag === 'wechat' || flag === 'alipay') return true
+  try {
+    // 微信静默授权回来后：URL 可能仍带车牌，用已保存的 code 自动打开并继续支付
+    return env === 'wechat' && !!sessionStorage.getItem('fp-wx-oauth-code')
+  } catch {
+    return false
+  }
+}
+
+function maybeAutoOpenPay() {
+  if (!shouldAutoOpenPay()) return
+  if ((payAmount.value ?? 0) > 0) gotoPay()
+}
+
+async function consumeWeChatOAuthQuery() {
+  const code = route.query.code
+  if (typeof code !== 'string' || !code) return
+  sessionStorage.setItem('fp-wx-oauth-code', code)
+  const query: Record<string, string> = {}
+  for (const [key, value] of Object.entries(route.query)) {
+    if (key === 'code' || key === 'state') continue
+    if (typeof value === 'string' && value) query[key] = value
+  }
+  await router.replace({ name: 'home', query })
 }
 
 function money(value: number): string {
@@ -257,11 +341,73 @@ function money(value: number): string {
 }
 
 function gotoPay() {
+  if (payAmount.value <= 0) {
+    error.value = t('pay.needSelect')
+    return
+  }
   paySheetOpen.value = true
+}
+
+function sessionIdsFromQuery(): number[] {
+  const raw = route.query.sessions
+  const text = Array.isArray(raw) ? String(raw[0] ?? '') : String(raw ?? '')
+  if (!text) return []
+  return text
+    .split(/[,\s]+/)
+    .map((part) => Number(part))
+    .filter((id) => Number.isFinite(id) && id > 0)
+}
+
+function syncSelection(preferred?: number[]) {
+  const ids = payableItems.value.map((item) => item.sessionId)
+  if (forcePayAll.value) {
+    selectedSessionIds.value = ids
+    return
+  }
+  if (preferred && preferred.length) {
+    const allow = new Set(ids)
+    const keep = preferred.filter((id) => allow.has(id))
+    selectedSessionIds.value = keep.length ? keep : ids
+    return
+  }
+  selectedSessionIds.value = ids
+}
+
+function isItemSelected(item: PlateFeeItem): boolean {
+  return selectedSessionIds.value.includes(item.sessionId)
+}
+
+function toggleItem(item: PlateFeeItem) {
+  if (!canSelectPay.value || item.amount <= 0 || !item.sessionId) return
+  if (isItemSelected(item)) {
+    selectedSessionIds.value = selectedSessionIds.value.filter((id) => id !== item.sessionId)
+  } else {
+    selectedSessionIds.value = [...selectedSessionIds.value, item.sessionId]
+  }
+}
+
+function toggleSelectAll() {
+  if (!canSelectPay.value) return
+  selectedSessionIds.value = allPayableSelected.value
+    ? []
+    : payableItems.value.map((item) => item.sessionId)
+}
+
+function onPayCreated(order: PaymentOrder) {
+  paySheetOpen.value = false
+  router.push({
+    name: 'pay-status',
+    params: { payNo: order.payNo },
+    query: {
+      plate: order.plateNumber,
+      ...(order.plateColor ? { plateColor: order.plateColor } : {})
+    }
+  })
 }
 
 onMounted(async () => {
   loadRecents()
+  await consumeWeChatOAuthQuery()
   // 先取站点配置（区域/默认颜色），再处理 URL 直达查询
   await applySiteSettings()
   await autoQueryFromUrl()
@@ -398,7 +544,20 @@ onMounted(async () => {
 
     <!-- 结果页 -->
     <main v-else class="page result-page">
-      <template v-if="quote">
+      <!-- 带车牌直达（扫码 / 缴费返回）时先占位，避免闪回查询页 -->
+      <section v-if="!quote" class="card state-card">
+        <template v-if="error">
+          <p class="state-text">{{ error }}</p>
+          <button class="btn btn-primary btn-full" type="button" @click="goBackToSearch">
+            {{ t('btn.other') }}
+          </button>
+        </template>
+        <template v-else>
+          <span class="spinner spinner-ink" aria-hidden="true" />
+          <p class="state-text">{{ t('btn.querying') }}</p>
+        </template>
+      </section>
+      <template v-else>
         <!-- 金额汇总卡 -->
         <section
           class="card summary"
@@ -417,7 +576,7 @@ onMounted(async () => {
           <template v-if="hasDue">
             <p class="summary-label">{{ t('sum.due') }}</p>
             <p class="summary-amount"><span class="cny">{{ currencySymbol }}</span>{{ money(quote.totalAmount) }}</p>
-            <p class="summary-note">{{ t('sum.dueNote') }}</p>
+            <p class="summary-note">{{ canSelectPay ? t('sum.selectNote') : t('sum.dueNote') }}</p>
           </template>
           <template v-else-if="ongoingFree">
             <p class="summary-label">{{ t('sum.free') }}</p>
@@ -475,13 +634,31 @@ onMounted(async () => {
 
         <!-- 明细 -->
         <section v-if="ongoingItems.length" class="card list-card">
-          <h2 class="list-title">{{ t('list.ongoing') }} <span class="list-count">{{ ongoingItems.length }}</span></h2>
+          <h2 class="list-title">
+            {{ t('list.ongoing') }} <span class="list-count">{{ ongoingItems.length }}</span>
+            <button
+              v-if="canSelectPay"
+              class="select-all"
+              type="button"
+              @click="toggleSelectAll"
+            >
+              {{ allPayableSelected ? t('list.unselectAll') : t('list.selectAll') }}
+            </button>
+          </h2>
           <ul class="list">
             <li
-              v-for="(item, idx) in ongoingItems"
-              :key="'o' + idx"
+              v-for="item in ongoingItems"
+              :key="'o' + item.sessionId"
               class="list-item"
+              :class="{ selectable: canSelectPay && item.amount > 0, selected: canSelectPay && isItemSelected(item) }"
+              @click="toggleItem(item)"
             >
+              <span
+                v-if="canSelectPay && item.amount > 0"
+                class="pick"
+                :class="{ on: isItemSelected(item) }"
+                aria-hidden="true"
+              />
               <div class="item-main">
                 <div class="item-line1">
                   <span class="lot-name">{{ item.lotName || t('list.unknown') }}</span>
@@ -504,13 +681,31 @@ onMounted(async () => {
         </section>
 
         <section v-if="settledItems.length" class="card list-card">
-          <h2 class="list-title">{{ t('list.settled') }} <span class="list-count">{{ settledItems.length }}</span></h2>
+          <h2 class="list-title">
+            {{ t('list.settled') }} <span class="list-count">{{ settledItems.length }}</span>
+            <button
+              v-if="canSelectPay && !ongoingItems.length"
+              class="select-all"
+              type="button"
+              @click="toggleSelectAll"
+            >
+              {{ allPayableSelected ? t('list.unselectAll') : t('list.selectAll') }}
+            </button>
+          </h2>
           <ul class="list">
             <li
-              v-for="(item, idx) in settledItems"
-              :key="'s' + idx"
+              v-for="item in settledItems"
+              :key="'s' + item.sessionId"
               class="list-item"
+              :class="{ selectable: canSelectPay && item.amount > 0, selected: canSelectPay && isItemSelected(item) }"
+              @click="toggleItem(item)"
             >
+              <span
+                v-if="canSelectPay && item.amount > 0"
+                class="pick"
+                :class="{ on: isItemSelected(item) }"
+                aria-hidden="true"
+              />
               <div class="item-main">
                 <div class="item-line1">
                   <span class="lot-name">{{ item.lotName || t('list.unknown') }}</span>
@@ -534,37 +729,36 @@ onMounted(async () => {
 
     <!-- 底部操作条（结果页） -->
     <footer v-if="view === 'result' && quote" class="actionbar">
-      <button v-if="hasDue" class="btn btn-pay" type="button" @click="gotoPay">
-        {{ t('btn.pay') }} {{ currencySymbol }}{{ money(quote.totalAmount) }}
+      <button
+        v-if="hasDue"
+        class="btn btn-pay"
+        type="button"
+        :disabled="payAmount <= 0"
+        @click="gotoPay"
+      >
+        {{ t('btn.pay') }} {{ currencySymbol }}{{ money(payAmount) }}
       </button>
       <button v-else class="btn btn-primary btn-full" type="button" @click="goBackToSearch">
         {{ t('btn.other') }}
       </button>
     </footer>
 
-    <!-- 缴费说明（线上支付能力尚未开放，如实提示） -->
-    <div v-if="paySheetOpen" class="mask" @click.self="paySheetOpen = false">
-      <section class="sheet" role="dialog" aria-modal="true" :aria-label="t('sheet.title')">
-        <div class="sheet-grip" />
-        <span class="sheet-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="30" height="30">
-            <path
-              d="M12 3l7 4v5c0 4.4-3 8.4-7 9-4-.6-7-4.6-7-9V7l7-4z"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linejoin="round"
-            />
-            <path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </span>
-        <h3>{{ t('sheet.title') }}</h3>
-        <p>{{ t('sheet.body') }}</p>
-        <div class="sheet-actions">
-          <button class="btn btn-ghost" type="button" @click="paySheetOpen = false">{{ t('sheet.ok') }}</button>
-        </div>
-      </section>
-    </div>
+    <!-- 缴费：按系统配置开放的支付方式下单 -->
+    <PaySheet
+      :open="paySheetOpen"
+      :amount="payAmount"
+      :currency-symbol="currencySymbol"
+      :methods="paymentMethods"
+      :plate="quote?.plateNumber ?? ''"
+      :plate-color="manualColor"
+      :items="payItems"
+      :wechat-mp-app-id="wechatMpAppId"
+      :user-base-url="userBaseUrl"
+      :force-pay-all="forcePayAll"
+      :session-ids="selectedSessionIds"
+      @close="paySheetOpen = false"
+      @created="onPayCreated"
+    />
   </div>
 </template>
 
@@ -964,6 +1158,11 @@ onMounted(async () => {
   color: #fff;
   box-shadow: 0 10px 22px var(--fp-glow-accent);
 }
+.btn-pay:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
 .btn-full {
   margin-top: 0;
 }
@@ -1008,6 +1207,26 @@ onMounted(async () => {
 /* ===== 结果页 ===== */
 .result-page {
   padding-top: 6px;
+}
+
+/* 直达查询（扫码 / 缴费返回）加载或失败时的占位卡 */
+.state-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 180px;
+  text-align: center;
+}
+.state-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--fp-muted);
+}
+.spinner-ink {
+  border-color: var(--fp-line);
+  border-top-color: var(--fp-accent);
 }
 
 .summary {
@@ -1123,6 +1342,16 @@ onMounted(async () => {
   padding: 1px 8px;
   border-radius: 999px;
 }
+.select-all {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--fp-accent-deep);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
 .list {
   list-style: none;
   margin: 0;
@@ -1142,6 +1371,28 @@ onMounted(async () => {
 .list-item:last-child {
   border-bottom: none;
   padding-bottom: 8px;
+}
+.list-item.selectable {
+  cursor: pointer;
+}
+.list-item.selected {
+  background: color-mix(in srgb, var(--fp-sky) 22%, transparent);
+  margin-inline: -10px;
+  padding-inline: 10px;
+  border-radius: 12px;
+}
+.pick {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #c9d4ce;
+  box-sizing: border-box;
+}
+.pick.on {
+  border-color: var(--fp-accent-deep);
+  background: var(--fp-accent-deep);
+  box-shadow: inset 0 0 0 3px #fff;
 }
 .item-main {
   min-width: 0;
@@ -1222,69 +1473,4 @@ onMounted(async () => {
   border-top: 1px solid var(--fp-line);
 }
 
-/* ===== 底部弹层 ===== */
-.mask {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  background: rgba(10, 14, 20, 0.45);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-.sheet {
-  width: 100%;
-  max-width: 500px;
-  background: var(--fp-card);
-  border-radius: 24px 24px 0 0;
-  padding: 10px 22px calc(24px + env(safe-area-inset-bottom));
-  box-sizing: border-box;
-  text-align: center;
-  animation: slide-up 0.22s ease-out;
-}
-@keyframes slide-up {
-  from {
-    transform: translateY(40px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-.sheet-grip {
-  width: 36px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--fp-line);
-  margin: 0 auto 18px;
-}
-.sheet-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  color: #fff;
-  background: var(--fp-gradient);
-  box-shadow: 0 10px 22px var(--fp-glow);
-  margin-bottom: 14px;
-}
-.sheet h3 {
-  margin: 0 0 10px;
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--fp-ink);
-}
-.sheet p {
-  margin: 0 auto;
-  max-width: 300px;
-  color: var(--fp-muted);
-  font-size: 14px;
-  line-height: 1.8;
-}
-.sheet-actions .btn {
-  margin-top: 20px;
-}
 </style>

@@ -2,7 +2,9 @@ package com.freepark.cloud.simple.settings.service;
 
 import com.freepark.cloud.simple.common.i18n.BizException;
 import com.freepark.cloud.simple.common.i18n.MessageKeys;
+import com.freepark.cloud.simple.common.pay.PaymentNotifyUrls;
 import com.freepark.cloud.simple.settings.dto.AlipayConfigView;
+import com.freepark.cloud.simple.settings.dto.AlipayPayRuntimeConfig;
 import com.freepark.cloud.simple.settings.dto.UpdateAlipayConfigUploadRequest;
 import com.freepark.cloud.simple.settings.entity.AlipayConfig;
 import com.freepark.cloud.simple.settings.repository.AlipayConfigRepository;
@@ -41,11 +43,35 @@ public class AlipayConfigService {
 
     /**
      * 读取支付宝支付配置（启用中的管理员可读，页面按菜单角色限制为超管）。
+     *
+     * @param defaultNotifyUrl 当前环境拼接出的默认异步通知地址
      */
     @Transactional(readOnly = true)
-    public AlipayConfigView getConfig() {
+    public AlipayConfigView getConfig(String defaultNotifyUrl) {
         adminGuard.requireEnabledAdmin();
-        return toView(requireConfig());
+        return toView(requireConfig(), defaultNotifyUrl);
+    }
+
+    /**
+     * 当前生效的支付回调地址（自定义优先，否则系统默认）。供下单 notify_url 使用。
+     */
+    @Transactional(readOnly = true)
+    public String effectiveNotifyUrl(String defaultNotifyUrl) {
+        return PaymentNotifyUrls.resolve(
+                repository.findById(AlipayConfig.SINGLETON_ID).map(AlipayConfig::getNotifyUrl).orElse(""),
+                defaultNotifyUrl);
+    }
+
+    /**
+     * 支付回调验签用的运行时凭据（无登录，仅供渠道通知处理读取）。
+     */
+    @Transactional(readOnly = true)
+    public AlipayPayRuntimeConfig loadRuntime() {
+        return repository.findById(AlipayConfig.SINGLETON_ID)
+                .map(config -> new AlipayPayRuntimeConfig(
+                        blankToEmpty(config.getAppId()),
+                        blankToEmpty(config.getAlipayPublicKey())))
+                .orElseGet(AlipayPayRuntimeConfig::empty);
     }
 
     /**
@@ -53,15 +79,16 @@ public class AlipayConfigService {
      * 提供文件时自动校验密钥格式；不提供的密钥项保持原值。
      */
     @Transactional
-    public AlipayConfigView updateConfig(UpdateAlipayConfigUploadRequest request) {
+    public AlipayConfigView updateConfig(UpdateAlipayConfigUploadRequest request, String defaultNotifyUrl) {
         requireSuperAdmin();
         if (request == null) {
             throw new BizException(400, MessageKeys.COMMON_BAD_REQUEST);
         }
         AlipayConfig config = requireConfig();
         config.setAppId(AlipayConfigOptions.validateAppId(request.appId()));
+        config.setNotifyUrl(PaymentNotifyUrls.normalizeForStore(request.notifyUrl(), defaultNotifyUrl));
         applyUploadedFiles(config, request);
-        return toView(repository.saveAndFlush(config));
+        return toView(repository.saveAndFlush(config), defaultNotifyUrl);
     }
 
     /**
@@ -119,6 +146,10 @@ public class AlipayConfigService {
         return value == null || value.isBlank();
     }
 
+    private static String blankToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
     /**
      * 返回单例配置；若记录缺失则懒创建默认行。
      */
@@ -127,12 +158,15 @@ public class AlipayConfigService {
                 .orElseGet(() -> repository.save(AlipayConfig.defaults()));
     }
 
-    private AlipayConfigView toView(AlipayConfig config) {
+    private AlipayConfigView toView(AlipayConfig config, String defaultNotifyUrl) {
+        String defaults = defaultNotifyUrl == null ? "" : defaultNotifyUrl.trim();
         return new AlipayConfigView(
                 config.getAppId(),
                 !isBlank(config.getAppPrivateKeyPem()),
                 !isBlank(config.getAlipayPublicKey()),
-                config.getUpdatedAt());
+                config.getUpdatedAt(),
+                PaymentNotifyUrls.resolve(config.getNotifyUrl(), defaults),
+                defaults);
     }
 
     private void requireSuperAdmin() {

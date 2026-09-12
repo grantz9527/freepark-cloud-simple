@@ -21,7 +21,7 @@ public class PublicSiteSettingsController {
     }
 
     /**
-     * 查询用户端默认 UI 基准（车牌版式国家/地区 + 默认语言）。
+     * 查询用户端默认 UI 基准（车牌版式、语言、币种与开放的缴费方式）。
      */
     @GetMapping("/site-settings")
     public PublicSiteSettingsView get() {

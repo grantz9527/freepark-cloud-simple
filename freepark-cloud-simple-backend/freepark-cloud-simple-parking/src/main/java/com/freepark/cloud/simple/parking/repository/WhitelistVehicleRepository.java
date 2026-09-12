@@ -1,5 +1,6 @@
 package com.freepark.cloud.simple.parking.repository;
 
+import com.freepark.cloud.simple.parking.entity.PlateColor;
 import com.freepark.cloud.simple.parking.entity.WhitelistVehicle;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -15,16 +16,19 @@ public interface WhitelistVehicleRepository
     /**
      * 车场下是否存在当前时间正处于有效时间区间（且启用）的白名单记录。
      * 同一车牌可有多张停车卡（多条记录），只有区间覆盖当前时刻的才视为有效白名单。
+     * 识别色非空时必须与登记色一致，蓝牌记录不能匹配黄牌识别。
      */
     @Query("""
             select count(w) > 0 from WhitelistVehicle w
             where w.lot.id = :lotId
               and lower(w.plateNumber) = lower(:plateNumber)
+              and (:plateColor is null or w.plateColor = :plateColor)
               and w.enabled = true
               and (w.startTime is null or w.startTime <= :now)
               and (w.endTime is null or w.endTime >= :now)
             """)
     boolean existsActiveAt(@Param("lotId") Long lotId, @Param("plateNumber") String plateNumber,
+                          @Param("plateColor") PlateColor plateColor,
                           @Param("now") LocalDateTime now);
 
     /** 车场下全部白名单记录（按创建顺序），用于云端全量快照下发 */

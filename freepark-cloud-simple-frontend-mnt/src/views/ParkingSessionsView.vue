@@ -888,9 +888,9 @@ onMounted(async () => {
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('payTime')" min-width="165">
+        <el-table-column :label="t('payTime')" min-width="170">
           <template #default="{ row }">
-            {{ row.payTime ?? '—' }}
+            {{ fmtDateTime(row.payTime) }}
           </template>
         </el-table-column>
         <el-table-column :label="t('actions')" min-width="230" fixed="right">

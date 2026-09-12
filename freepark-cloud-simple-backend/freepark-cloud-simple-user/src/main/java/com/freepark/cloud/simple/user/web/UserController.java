@@ -41,7 +41,10 @@ public class UserController {
             result.setMessage(messageService.get(MessageKeys.COMMON_OK));
             return result;
         } catch (BizException e) {
-            return ApiResult.fail(e.getCode(), messageService.get(e.getMessageKey()));
+            Object[] args = e.getArgs();
+            return ApiResult.fail(e.getCode(), args == null
+                    ? messageService.get(e.getMessageKey())
+                    : messageService.get(e.getMessageKey(), args));
         }
     }
 

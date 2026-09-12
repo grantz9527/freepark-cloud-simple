@@ -8,8 +8,8 @@ const d: BiDict = {
   loading: { 'zh-CN': '正在加载配置…', en: 'Loading configuration…' },
   scopeAlert: {
     'zh-CN':
-      '配置微信支付所需的商户信息与公众号授权信息。是否开放微信支付由「系统配置 → 收费方式」控制，开启前请先在此填齐商户与公众号参数。',
-    en: 'Configure the merchant and Official Account credentials for WeChat Pay. Whether WeChat Pay is open is controlled by System Settings → Payment Methods; fill in the parameters here before enabling it.'
+      '配置微信支付所需的商户信息与公众号授权信息。字段可分次填写保存；是否开放微信支付由「系统配置 → 收费方式」控制，正式收款前请确保商户与公众号参数齐全。',
+    en: 'Configure the merchant and Official Account credentials for WeChat Pay. Fields can be saved gradually. Whether WeChat Pay is open is controlled by System Settings → Payment Methods; complete all credentials before taking live payments.'
   },
   scope: {
     'zh-CN': '仅超级管理员可修改微信支付配置。',
@@ -17,26 +17,40 @@ const d: BiDict = {
   },
   sectionMerchant: { 'zh-CN': '商户参数', en: 'Merchant Parameters' },
   sectionMerchantHint: {
-    'zh-CN': '用于发起收款与签名验签的微信支付商户凭据，在微信商户平台申请。',
-    en: 'WeChat Pay merchant credentials used to create and verify payments. Apply via the WeChat Merchant Platform.'
+    'zh-CN': '用于发起收款与签名的微信支付商户凭据，在微信商户平台申请。可分次填写保存。',
+    en: 'WeChat Pay merchant credentials used to create and sign payments. Apply via the WeChat Merchant Platform. Fields can be saved gradually.'
   },
   mchId: { 'zh-CN': '商户号', en: 'Merchant ID' },
   mchIdPlaceholder: { 'zh-CN': '微信支付商户号（纯数字）', en: 'WeChat Pay merchant ID (digits only)' },
   mchIdHint: { 'zh-CN': '在微信商户平台“账户中心 → 商户信息”中查看。', en: 'Find it under Account Center → Merchant Info on the WeChat Merchant Platform.' },
+  mchName: { 'zh-CN': '商户名称', en: 'Merchant name' },
+  mchNamePlaceholder: { 'zh-CN': '商户平台登记的商户名称', en: 'Merchant name registered on the platform' },
+  mchNameHint: {
+    'zh-CN': '与微信商户平台「账户中心 → 商户信息」中的商户名称保持一致即可。',
+    en: 'Match the merchant name shown under Account Center → Merchant Info.'
+  },
+  mchCertSerialNo: { 'zh-CN': '商户序列号', en: 'Merchant serial number' },
+  mchCertSerialNoPlaceholder: {
+    'zh-CN': '商户 API 证书序列号（十六进制）',
+    en: 'Merchant API certificate serial (hex)'
+  },
+  mchCertSerialNoHint: {
+    'zh-CN': '可手填；若上传商户 API 证书，保存时会自动覆盖为证书解析值。',
+    en: 'You can type it manually; uploading the merchant API certificate overwrites it with the parsed value on save.'
+  },
   mchApiKey: { 'zh-CN': '商户 API 密钥', en: 'Merchant API Key' },
   mchApiKeyPlaceholder: { 'zh-CN': '32 位字母数字（API v3）', en: 'Alphanumeric (API v3)' },
   mchApiKeySetPlaceholder: { 'zh-CN': '已配置，留空保持不变', en: 'Configured. Leave blank to keep' },
   mchApiKeyHint: {
-    'zh-CN': '用于支付请求签名。密钥仅保存不回显，重新填写即覆盖。',
-    en: 'Used to sign payment requests. It is never returned; type a new value to replace it.'
+    'zh-CN': '用于支付请求签名与回调解密。密钥仅保存不回显，重新填写即覆盖。',
+    en: 'Used to sign payment requests and decrypt notify payloads. It is never returned; type a new value to replace it.'
   },
-  sectionCert: { 'zh-CN': '商户 API 证书与平台验签', en: 'Merchant API Certificate & Platform Verification' },
+  sectionCert: { 'zh-CN': '商户 API 证书', en: 'Merchant API Certificate' },
   sectionCertHint: {
-    'zh-CN': '请求签名所需的商户 API 证书（证书与私钥在商户平台成对下载）与平台验签所需的微信支付公钥。选择文件后保存，系统自动校验并解析证书序列号等信息；文件内容仅保存不回显。',
-    en: 'Upload the merchant API certificate pair (certificate + private key, downloaded together) for request signing, and the WeChat Pay public key for response verification. The system validates and parses the certificate after saving. Files are stored but never returned.'
+    'zh-CN': '请求签名所需的商户 API 证书（证书与私钥在商户平台成对下载）。选择文件后保存，系统自动校验并解析颁发者与有效期；文件内容仅保存不回显。',
+    en: 'Upload the merchant API certificate pair (certificate + private key, downloaded together) for request signing. The system validates and parses issuer and validity after saving. Files are stored but never returned.'
   },
   certStatus: { 'zh-CN': '商户 API 证书', en: 'Merchant API cert' },
-  pubKeyStatus: { 'zh-CN': '验签公钥', en: 'Verification key' },
   configured: { 'zh-CN': '已配置', en: 'Configured' },
   notConfigured: { 'zh-CN': '未配置', en: 'Not configured' },
   certFile: { 'zh-CN': '商户 API 证书文件', en: 'Merchant API Certificate File' },
@@ -44,29 +58,10 @@ const d: BiDict = {
   keyFile: { 'zh-CN': '商户 API 证书私钥', en: 'Merchant API Private Key File' },
   keyFileHint: { 'zh-CN': '商户平台下载的 apiclient_key.pem', en: 'apiclient_key.pem from the merchant platform' },
   certPairHint: {
-    'zh-CN': '证书与私钥需同时选择并保存；后端会校验两者是否配套（同一张证书），并自动解析序列号、颁发者与有效期。',
-    en: 'Select both the certificate and its private key before saving. The backend verifies they match and parses the serial number, issuer and validity automatically.'
-  },
-  publicKeyFile: { 'zh-CN': '微信支付公钥文件', en: 'WeChat Pay Public Key File' },
-  publicKeyFileHint: {
-    'zh-CN': '商户平台「API 安全 → 微信支付公钥」下载的 pub_key.pem',
-    en: 'pub_key.pem from API Security → WeChat Pay Public Key'
-  },
-  publicKeyPairHint: {
-    'zh-CN': '上传 pub_key.pem 时，需同时填写上方的公钥 ID。',
-    en: 'When uploading pub_key.pem, fill in the public key ID above as well.'
-  },
-  wechatPayPublicKeyId: { 'zh-CN': '微信支付公钥 ID', en: 'WeChat Pay Public Key ID' },
-  wechatPayPublicKeyIdPlaceholder: {
-    'zh-CN': '形如 PUB_KEY_ID_xxx',
-    en: 'e.g. PUB_KEY_ID_xxx'
-  },
-  wechatPayPublicKeyIdHint: {
-    'zh-CN': '商户平台「API 安全 → 微信支付公钥」中查看；上传公钥文件时必填。',
-    en: 'Found at API Security → WeChat Pay Public Key. Required when uploading the key file.'
+    'zh-CN': '证书与私钥需同时选择并保存；后端会校验两者是否配套（同一张证书），并自动写入商户序列号、颁发者与有效期。',
+    en: 'Select both the certificate and its private key before saving. The backend verifies they match and fills serial number, issuer and validity automatically.'
   },
   certInfoTitle: { 'zh-CN': '已保存证书信息（上次上传解析）', en: 'Saved certificate info (parsed on last upload)' },
-  certSerialNo: { 'zh-CN': '证书序列号', en: 'Serial number' },
   certIssuer: { 'zh-CN': '颁发者', en: 'Issuer' },
   certValidUntil: { 'zh-CN': '有效期至', en: 'Valid until' },
   notConfiguredYet: {
@@ -97,60 +92,73 @@ const d: BiDict = {
   saving: { 'zh-CN': '保存中…', en: 'Saving…' },
   saved: { 'zh-CN': '配置已保存', en: 'Configuration saved' },
   loadFailed: { 'zh-CN': '加载配置失败，请重试', en: 'Failed to load configuration. Try again.' },
-  lastUpdated: { 'zh-CN': '最近更新', en: 'Last updated' }
+  lastUpdated: { 'zh-CN': '最近更新', en: 'Last updated' },
+  sectionNotify: { 'zh-CN': '支付回调地址', en: 'Payment notify URL' },
+  sectionNotifyHint: {
+    'zh-CN':
+      '默认由「系统配置 → 后台基础地址」拼接，可手动修改并保存；也可一键恢复默认。把该地址填到微信商户平台「产品中心 → 开发配置 → 支付回调 URL」，须公网可访问。若默认仍是 localhost，请先在系统配置填写云端公网 HTTPS 域名。回调解密使用本页 APIv3 密钥。',
+    en: 'Defaults from System Settings → Admin base URL; you can edit and save, or restore the default in one click. Paste this URL into WeChat Merchant Platform → Product Center → Dev Config → Payment Notify URL. It must be publicly reachable. If the default is still localhost, set the public HTTPS origin in System Settings first. Notify payloads are decrypted with the APIv3 key on this page.'
+  },
+  notifyUrl: { 'zh-CN': '回调地址', en: 'Notify URL' },
+  notifyUrlHint: {
+    'zh-CN': '默认由「系统配置 → 后台基础地址」拼接；可手动修改。与默认相同或留空保存后会跟随默认。路径建议为 /api/public/payment/wechat/notify。',
+    en: 'Defaults from System Settings → Admin base URL; you can edit it. Saving the default or blank keeps following the default. Preferred path: /api/public/payment/wechat/notify.'
+  },
+  restoreDefault: { 'zh-CN': '恢复默认', en: 'Restore default' },
+  restoredDefault: { 'zh-CN': '已恢复为默认地址，请保存配置', en: 'Restored to default. Save to apply.' },
+  copy: { 'zh-CN': '复制', en: 'Copy' },
+  copySuccess: { 'zh-CN': '已复制回调地址', en: 'Notify URL copied' },
+  copyFailed: { 'zh-CN': '复制失败，请手动选择复制', en: 'Copy failed, please copy it manually' }
 }
 
 const { t } = useBiText(d)
 
 interface WeChatConfigView {
   mchId: string
+  mchName: string
   mchApiKeySet: boolean
   mchPrivateKeySet: boolean
   mchCertSerialNo: string
   mchCertIssuer: string
   mchCertValidUntil: string
-  wechatPayPublicKeySet: boolean
-  wechatPayPublicKeyId: string
   mpAppId: string
   mpAppSecretSet: boolean
   updatedAt: string
+  notifyUrl: string
+  defaultNotifyUrl: string
 }
 
-type SlotKey = 'cert' | 'key' | 'publicKey'
+type SlotKey = 'cert' | 'key'
 
 const loading = ref(true)
 const saving = ref(false)
 
 const mchId = ref('')
+const mchName = ref('')
+const mchCertSerialNo = ref('')
 const mchApiKey = ref('')
 const mpAppId = ref('')
 const mpAppSecret = ref('')
-const wechatPayPublicKeyId = ref('')
 
 const mchApiKeySet = ref(false)
 const mchPrivateKeySet = ref(false)
-const mchCertSerialNo = ref('')
 const mchCertIssuer = ref('')
 const mchCertValidUntil = ref('')
-const wechatPayPublicKeySet = ref(false)
 const mpAppSecretSet = ref(false)
 const updatedAt = ref('')
+const notifyUrl = ref('')
+const defaultNotifyUrl = ref('')
 
 /** 待上传文件（每次保存后清空；留空表示不更新该项） */
 const chosenFiles = ref<Record<SlotKey, File | null>>({
   cert: null,
-  key: null,
-  publicKey: null
+  key: null
 })
 const certUploadRef = ref<UploadInstance>()
 const keyUploadRef = ref<UploadInstance>()
-const publicKeyUploadRef = ref<UploadInstance>()
 
 const certConfiguredText = computed(() =>
   mchPrivateKeySet.value ? t('configured') : t('notConfigured')
-)
-const pubKeyConfiguredText = computed(() =>
-  wechatPayPublicKeySet.value ? t('configured') : t('notConfigured')
 )
 
 /** 仅保留数字（商户号） */
@@ -167,16 +175,20 @@ function restrictApiKey(event: Event): void {
 
 function applyView(view: WeChatConfigView): void {
   mchId.value = view.mchId
+  mchName.value = view.mchName ?? ''
+  mchCertSerialNo.value = view.mchCertSerialNo ?? ''
   mpAppId.value = view.mpAppId
   mchApiKeySet.value = view.mchApiKeySet
   mchPrivateKeySet.value = view.mchPrivateKeySet
-  mchCertSerialNo.value = view.mchCertSerialNo ?? ''
   mchCertIssuer.value = view.mchCertIssuer ?? ''
   mchCertValidUntil.value = view.mchCertValidUntil ?? ''
-  wechatPayPublicKeySet.value = view.wechatPayPublicKeySet
-  wechatPayPublicKeyId.value = view.wechatPayPublicKeyId ?? ''
   mpAppSecretSet.value = view.mpAppSecretSet
   updatedAt.value = view.updatedAt
+  const effective = (view.notifyUrl ?? '').trim()
+  const defaults = (view.defaultNotifyUrl ?? '').trim()
+  defaultNotifyUrl.value = defaults
+  // 与默认相同则留空，用 placeholder 展示默认，避免长 URL 把输入框撑挤后无法点选编辑
+  notifyUrl.value = effective && effective !== defaults ? effective : ''
 }
 
 /**
@@ -237,17 +249,13 @@ function uploadRefOf(slotKey: SlotKey): UploadInstance | undefined {
   if (slotKey === 'cert') {
     return certUploadRef.value
   }
-  if (slotKey === 'key') {
-    return keyUploadRef.value
-  }
-  return publicKeyUploadRef.value
+  return keyUploadRef.value
 }
 
 function clearChosenFiles(): void {
-  chosenFiles.value = { cert: null, key: null, publicKey: null }
+  chosenFiles.value = { cert: null, key: null }
   certUploadRef.value?.clearFiles()
   keyUploadRef.value?.clearFiles()
-  publicKeyUploadRef.value?.clearFiles()
 }
 
 async function handleSave(): Promise<void> {
@@ -255,22 +263,20 @@ async function handleSave(): Promise<void> {
   try {
     const fd = new FormData()
     fd.append('mchId', mchId.value.trim())
+    fd.append('mchName', mchName.value.trim())
+    fd.append('mchCertSerialNo', mchCertSerialNo.value.trim())
     // 敏感字段留空表示保持不变，由后端处理
     fd.append('mchApiKey', mchApiKey.value.trim())
     fd.append('mpAppId', mpAppId.value.trim())
     fd.append('mpAppSecret', mpAppSecret.value.trim())
-    fd.append('wechatPayPublicKeyId', wechatPayPublicKeyId.value.trim())
+    fd.append('notifyUrl', notifyUrl.value.trim())
     const certFile = chosenFiles.value.cert
     const keyFile = chosenFiles.value.key
-    const publicKeyFile = chosenFiles.value.publicKey
     if (certFile) {
       fd.append('certFile', certFile)
     }
     if (keyFile) {
       fd.append('keyFile', keyFile)
-    }
-    if (publicKeyFile) {
-      fd.append('wechatPayPublicKeyFile', publicKeyFile)
     }
     const view = await request.post<never, WeChatConfigView>('/system/wechat/config', fd)
     mchApiKey.value = ''
@@ -284,6 +290,43 @@ async function handleSave(): Promise<void> {
     saving.value = false
   }
 }
+
+async function copyNotifyUrl(): Promise<void> {
+  const text = (notifyUrl.value.trim() || defaultNotifyUrl.value.trim())
+  if (!text) {
+    return
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const area = document.createElement('textarea')
+      area.value = text
+      area.style.position = 'fixed'
+      area.style.opacity = '0'
+      document.body.appendChild(area)
+      area.select()
+      document.execCommand('copy')
+      document.body.removeChild(area)
+    }
+    ElMessage.success(t('copySuccess'))
+  } catch {
+    ElMessage.error(t('copyFailed'))
+  }
+}
+
+function restoreDefaultNotifyUrl(): void {
+  notifyUrl.value = ''
+  ElMessage.success(t('restoredDefault'))
+}
+
+const notifyIsDefault = computed(
+  () => !notifyUrl.value.trim() || notifyUrl.value.trim() === defaultNotifyUrl.value.trim()
+)
+
+const effectiveNotifyUrl = computed(
+  () => notifyUrl.value.trim() || defaultNotifyUrl.value.trim()
+)
 
 onMounted(loadConfig)
 </script>
@@ -299,6 +342,32 @@ onMounted(loadConfig)
           <span>{{ t('scope') }}</span>
         </el-alert>
 
+        <h3 class="group-title">{{ t('sectionNotify') }}</h3>
+        <p class="section-hint">{{ t('sectionNotifyHint') }}</p>
+        <el-form-item :label="t('notifyUrl')" class="notify-item">
+          <el-input
+            v-model="notifyUrl"
+            clearable
+            class="field notify-field"
+            :placeholder="defaultNotifyUrl || t('notifyUrl')"
+          />
+          <div class="notify-actions">
+            <el-button native-type="button" :disabled="!effectiveNotifyUrl" @click="copyNotifyUrl">
+              {{ t('copy') }}
+            </el-button>
+            <el-button
+              native-type="button"
+              :disabled="!defaultNotifyUrl || notifyIsDefault"
+              @click="restoreDefaultNotifyUrl"
+            >
+              {{ t('restoreDefault') }}
+            </el-button>
+          </div>
+          <div class="field-hint">{{ t('notifyUrlHint') }}</div>
+        </el-form-item>
+
+        <el-divider />
+
         <h3 class="group-title">{{ t('sectionMerchant') }}</h3>
         <p class="section-hint">{{ t('sectionMerchantHint') }}</p>
         <div class="field-grid">
@@ -312,6 +381,26 @@ onMounted(loadConfig)
               @input="restrictDigits"
             />
             <div class="field-hint">{{ t('mchIdHint') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('mchName')">
+            <el-input
+              v-model="mchName"
+              :placeholder="t('mchNamePlaceholder')"
+              maxlength="128"
+              clearable
+              class="field"
+            />
+            <div class="field-hint">{{ t('mchNameHint') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('mchCertSerialNo')">
+            <el-input
+              v-model="mchCertSerialNo"
+              :placeholder="t('mchCertSerialNoPlaceholder')"
+              maxlength="64"
+              clearable
+              class="field"
+            />
+            <div class="field-hint">{{ t('mchCertSerialNoHint') }}</div>
           </el-form-item>
           <el-form-item :label="t('mchApiKey')">
             <el-input
@@ -338,21 +427,18 @@ onMounted(loadConfig)
           <el-tag size="small" :type="mchPrivateKeySet ? 'success' : 'info'" effect="plain">
             {{ t('certStatus') }}：{{ certConfiguredText }}
           </el-tag>
-          <el-tag size="small" :type="wechatPayPublicKeySet ? 'success' : 'info'" effect="plain">
-            {{ t('pubKeyStatus') }}：{{ pubKeyConfiguredText }}
-          </el-tag>
         </div>
 
         <div v-if="mchPrivateKeySet" class="cert-info">
           <div class="cert-info-title">{{ t('certInfoTitle') }}</div>
           <div class="cert-info-grid">
             <div class="ci-row">
-              <span class="ci-label">{{ t('certSerialNo') }}</span>
-              <span class="ci-value mono">{{ mchCertSerialNo }}</span>
+              <span class="ci-label">{{ t('mchCertSerialNo') }}</span>
+              <span class="ci-value mono">{{ mchCertSerialNo || '-' }}</span>
             </div>
             <div class="ci-row">
               <span class="ci-label">{{ t('certIssuer') }}</span>
-              <span class="ci-value">{{ mchCertIssuer }}</span>
+              <span class="ci-value">{{ mchCertIssuer || '-' }}</span>
             </div>
             <div class="ci-row">
               <span class="ci-label">{{ t('certValidUntil') }}</span>
@@ -406,45 +492,6 @@ onMounted(loadConfig)
           </el-form-item>
         </div>
         <p class="section-hint">{{ t('certPairHint') }}</p>
-
-        <el-form-item :label="t('wechatPayPublicKeyId')">
-          <el-input
-            v-model="wechatPayPublicKeyId"
-            :placeholder="t('wechatPayPublicKeyIdPlaceholder')"
-            maxlength="64"
-            clearable
-            class="field"
-          />
-          <div class="field-hint">{{ t('wechatPayPublicKeyIdHint') }}</div>
-        </el-form-item>
-
-        <el-form-item :label="t('publicKeyFile')">
-          <el-upload
-            ref="publicKeyUploadRef"
-            :auto-upload="false"
-            :show-file-list="false"
-            accept=".pem,.crt,.cer,.txt"
-            class="upload-slot"
-            :on-change="(f: UploadFile) => handleSlotChange('publicKey', f)"
-          >
-            <div class="upload-trigger">
-              <el-tag
-                v-if="chosenFiles.publicKey"
-                closable
-                class="file-tag"
-                @close="removeSlotFile('publicKey')"
-              >
-                {{ chosenFiles.publicKey.name }}
-              </el-tag>
-              <template v-else>
-                <span class="choose-text">{{ t('chooseFile') }}</span>
-                <span class="choose-tip">{{ t('chooseFileTip') }}</span>
-              </template>
-            </div>
-          </el-upload>
-          <div class="field-hint">{{ t('publicKeyFileHint') }}</div>
-        </el-form-item>
-        <p class="section-hint">{{ t('publicKeyPairHint') }}</p>
 
         <el-divider />
 
@@ -571,6 +618,28 @@ onMounted(loadConfig)
 
 .field {
   width: 100%;
+}
+
+.notify-item :deep(.el-form-item__content) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.notify-field {
+  width: 100%;
+}
+
+.notify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notify-field :deep(.el-input__inner) {
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.82rem;
 }
 
 .upload-slot {

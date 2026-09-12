@@ -5,3 +5,17 @@ spring:
     active: dev
 server:
   port: 8080
+
+freepark:
+  cors:
+    # 逗号分隔；默认 * 允许任意前端源（Authorization 头鉴权，不携带 Cookie）
+    allowed-origin-patterns: ${FREEPARK_CORS_ALLOWED_ORIGIN_PATTERNS:*}
+  public:
+    # 仅当系统配置「后台基础地址」为空时作为支付回调后备。
+    # 生产请在管理端填写公网 HTTPS 根地址。
+    base-url: ${FREEPARK_PUBLIC_BASE_URL:}
+    # 仅当系统配置「用户端基础地址」为空时作为 C 端跳转后备；再空则回落后台地址。
+    user-base-url: ${FREEPARK_PUBLIC_USER_BASE_URL:}
+  payment:
+    # 微信支付商品名称前缀 / 商户数据包。生产请留空或设 FREEPARK_WECHAT_ATTACH=
+    wechat-attach: ${FREEPARK_WECHAT_ATTACH:}

@@ -8,8 +8,8 @@ const d: BiDict = {
   loading: { 'zh-CN': '正在加载配置…', en: 'Loading configuration…' },
   scopeAlert: {
     'zh-CN':
-      '配置支付宝开放平台应用与签名密钥。是否开放支付宝支付由「系统配置 → 收费方式」控制，开启前请先在此填齐应用 AppID 与签名密钥。',
-    en: 'Configure the Alipay Open Platform app and signing keys. Whether Alipay is open is controlled by System Settings → Payment Methods; fill in the parameters here before enabling it.'
+      '配置支付宝开放平台应用与签名密钥。字段可分次填写保存；是否开放支付宝支付由「系统配置 → 收费方式」控制，正式收款前请确保 AppID 与签名密钥齐全。',
+    en: 'Configure the Alipay Open Platform app and signing keys. Fields can be saved gradually. Whether Alipay is open is controlled by System Settings → Payment Methods; complete AppID and keys before taking live payments.'
   },
   scope: {
     'zh-CN': '仅超级管理员可修改支付宝支付配置。',
@@ -64,7 +64,23 @@ const d: BiDict = {
   saving: { 'zh-CN': '保存中…', en: 'Saving…' },
   saved: { 'zh-CN': '配置已保存', en: 'Configuration saved' },
   loadFailed: { 'zh-CN': '加载配置失败，请重试', en: 'Failed to load configuration. Try again.' },
-  lastUpdated: { 'zh-CN': '最近更新', en: 'Last updated' }
+  lastUpdated: { 'zh-CN': '最近更新', en: 'Last updated' },
+  sectionNotify: { 'zh-CN': '支付回调地址', en: 'Payment notify URL' },
+  sectionNotifyHint: {
+    'zh-CN':
+      '默认由「系统配置 → 后台基础地址」拼接，可手动修改并保存；也可一键恢复默认。把该地址填到支付宝开放平台应用「开发设置 → 应用网关」，须公网可访问。若默认仍是 localhost，请先在系统配置填写云端公网 HTTPS 域名。验签使用本页支付宝公钥（RSA2）。这不是授权回调地址（OAuth）。',
+    en: 'Defaults from System Settings → Admin base URL; you can edit and save, or restore the default in one click. Paste this URL into Alipay Open Platform → App Dev Settings → Application Gateway. It must be publicly reachable. If the default is still localhost, set the public HTTPS origin in System Settings first. Notifications are verified with the Alipay public key (RSA2) on this page. This is not the OAuth redirect URL.'
+  },
+  notifyUrl: { 'zh-CN': '回调地址', en: 'Notify URL' },
+  notifyUrlHint: {
+    'zh-CN': '默认由「系统配置 → 后台基础地址」拼接；可手动修改。与默认相同或留空保存后会跟随默认。路径建议为 /api/public/payment/alipay/notify。',
+    en: 'Defaults from System Settings → Admin base URL; you can edit it. Saving the default or blank keeps following the default. Preferred path: /api/public/payment/alipay/notify.'
+  },
+  restoreDefault: { 'zh-CN': '恢复默认', en: 'Restore default' },
+  restoredDefault: { 'zh-CN': '已恢复为默认地址，请保存配置', en: 'Restored to default. Save to apply.' },
+  copy: { 'zh-CN': '复制', en: 'Copy' },
+  copySuccess: { 'zh-CN': '已复制回调地址', en: 'Notify URL copied' },
+  copyFailed: { 'zh-CN': '复制失败，请手动选择复制', en: 'Copy failed, please copy it manually' }
 }
 
 const { t } = useBiText(d)
@@ -74,6 +90,8 @@ interface AlipayConfigView {
   appPrivateKeySet: boolean
   alipayPublicKeySet: boolean
   updatedAt: string
+  notifyUrl: string
+  defaultNotifyUrl: string
 }
 
 type SlotKey = 'privateKey' | 'publicKey'
@@ -85,6 +103,8 @@ const appId = ref('')
 const appPrivateKeySet = ref(false)
 const alipayPublicKeySet = ref(false)
 const updatedAt = ref('')
+const notifyUrl = ref('')
+const defaultNotifyUrl = ref('')
 
 /** 待上传文件（每次保存后清空；留空表示不更新该项） */
 const chosenFiles = ref<Record<SlotKey, File | null>>({
@@ -112,6 +132,11 @@ function applyView(view: AlipayConfigView): void {
   appPrivateKeySet.value = view.appPrivateKeySet
   alipayPublicKeySet.value = view.alipayPublicKeySet
   updatedAt.value = view.updatedAt
+  const effective = (view.notifyUrl ?? '').trim()
+  const defaults = (view.defaultNotifyUrl ?? '').trim()
+  defaultNotifyUrl.value = defaults
+  // 与默认相同则留空，用 placeholder 展示默认，避免长 URL 把输入框撑挤后无法点选编辑
+  notifyUrl.value = effective && effective !== defaults ? effective : ''
 }
 
 /**
@@ -183,6 +208,7 @@ async function handleSave(): Promise<void> {
   try {
     const fd = new FormData()
     fd.append('appId', appId.value.trim())
+    fd.append('notifyUrl', notifyUrl.value.trim())
     // 敏感字段留空表示保持不变，由后端处理
     const privateKeyFile = chosenFiles.value.privateKey
     const publicKeyFile = chosenFiles.value.publicKey
@@ -203,6 +229,43 @@ async function handleSave(): Promise<void> {
   }
 }
 
+async function copyNotifyUrl(): Promise<void> {
+  const text = (notifyUrl.value.trim() || defaultNotifyUrl.value.trim())
+  if (!text) {
+    return
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const area = document.createElement('textarea')
+      area.value = text
+      area.style.position = 'fixed'
+      area.style.opacity = '0'
+      document.body.appendChild(area)
+      area.select()
+      document.execCommand('copy')
+      document.body.removeChild(area)
+    }
+    ElMessage.success(t('copySuccess'))
+  } catch {
+    ElMessage.error(t('copyFailed'))
+  }
+}
+
+function restoreDefaultNotifyUrl(): void {
+  notifyUrl.value = ''
+  ElMessage.success(t('restoredDefault'))
+}
+
+const notifyIsDefault = computed(
+  () => !notifyUrl.value.trim() || notifyUrl.value.trim() === defaultNotifyUrl.value.trim()
+)
+
+const effectiveNotifyUrl = computed(
+  () => notifyUrl.value.trim() || defaultNotifyUrl.value.trim()
+)
+
 onMounted(loadConfig)
 </script>
 
@@ -216,6 +279,32 @@ onMounted(loadConfig)
         <el-alert type="warning" :closable="false" class="scope-alert" show-icon>
           <span>{{ t('scope') }}</span>
         </el-alert>
+
+        <h3 class="group-title">{{ t('sectionNotify') }}</h3>
+        <p class="section-hint">{{ t('sectionNotifyHint') }}</p>
+        <el-form-item :label="t('notifyUrl')" class="notify-item">
+          <el-input
+            v-model="notifyUrl"
+            clearable
+            class="field notify-field"
+            :placeholder="defaultNotifyUrl || t('notifyUrl')"
+          />
+          <div class="notify-actions">
+            <el-button native-type="button" :disabled="!effectiveNotifyUrl" @click="copyNotifyUrl">
+              {{ t('copy') }}
+            </el-button>
+            <el-button
+              native-type="button"
+              :disabled="!defaultNotifyUrl || notifyIsDefault"
+              @click="restoreDefaultNotifyUrl"
+            >
+              {{ t('restoreDefault') }}
+            </el-button>
+          </div>
+          <div class="field-hint">{{ t('notifyUrlHint') }}</div>
+        </el-form-item>
+
+        <el-divider />
 
         <h3 class="group-title">{{ t('sectionApp') }}</h3>
         <p class="section-hint">{{ t('sectionAppHint') }}</p>
@@ -362,6 +451,28 @@ onMounted(loadConfig)
 
 .field {
   width: 100%;
+}
+
+.notify-item :deep(.el-form-item__content) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.notify-field {
+  width: 100%;
+}
+
+.notify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notify-field :deep(.el-input__inner) {
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.82rem;
 }
 
 .upload-slot {

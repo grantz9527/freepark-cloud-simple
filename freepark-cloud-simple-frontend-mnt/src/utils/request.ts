@@ -31,9 +31,9 @@ function currentLocale(): AppLocale {
   return 'zh-CN'
 }
 
-// 统一的后端请求实例，baseURL 可通过环境变量 VITE_API_BASE_URL 覆盖
+// 统一的后端请求实例，baseURL 由 .env.* 中的 VITE_API_BASE_URL 决定
 const request = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 10000
 })
 

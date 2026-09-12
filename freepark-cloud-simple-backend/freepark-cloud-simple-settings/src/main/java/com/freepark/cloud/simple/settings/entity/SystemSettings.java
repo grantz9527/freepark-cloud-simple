@@ -21,8 +21,11 @@ import java.util.List;
 /**
  * 全局站点配置（单例，参考 freepark local_server 的 SiteSettings）。
  *
- * <p>目前承载“区域与语言”（默认语言/时区）、“车牌颜色”（默认颜色/允许颜色）、
- * “收费金额单位”（默认币种/允许币种）与“收费方式”（允许的缴费渠道），
+ * <p>目前承载“区域与语言”（默认语言/时区）、
+ * “后台基础地址”（支付回调拼接）、“用户端基础地址”（用户端首页/缴费页）、
+ * “车牌颜色”（默认颜色/允许颜色）、
+ * “收费金额单位”（默认币种/允许币种）、“收费方式”（允许的缴费渠道）
+ * 与“用户端缴费范围”（强制全部支付 / 允许勾选指定订单），
  * 其余参考配置项暂未接入。</p>
  */
 @Entity
@@ -82,6 +85,28 @@ public class SystemSettings {
     @Column(name = "payment_method", nullable = false, length = 32)
     @OrderColumn(name = "sort_order")
     private List<String> allowedPaymentMethods = new ArrayList<>();
+
+    /**
+     * 后台基础地址：云端 API 公网根（如 https://cloud.example.com 或 https://host/fangzhi），无尾斜杠。
+     * 用于拼接微信/支付宝支付回调 URL；未填写时按当前请求 Host 推断。
+     * 列名沿用 site_base_url，避免既有库丢数据。
+     */
+    @Column(name = "site_base_url", length = 255)
+    private String adminBaseUrl = "";
+
+    /**
+     * 用户端基础地址：C 端网页公网根（如 https://pay.example.com 或 https://host/freepark-user），无尾斜杠。
+     * 用于用户端首页、缴费结果页与渠道同步跳回；未填写时回落后台基础地址。
+     */
+    @Column(name = "user_base_url", length = 255)
+    private String userBaseUrl = "";
+
+    /**
+     * 用户端缴费范围：true 强制一次缴清该车牌全部欠费；
+     * false 允许勾选指定停车记录缴费。空值按 true 兜底。
+     */
+    @Column(name = "force_pay_all")
+    private Boolean forcePayAll = Boolean.TRUE;
 
     @Column(nullable = false)
     private LocalDateTime updatedAt;
@@ -179,6 +204,30 @@ public class SystemSettings {
 
     public void setAllowedPaymentMethods(List<String> allowedPaymentMethods) {
         this.allowedPaymentMethods = new ArrayList<>(allowedPaymentMethods);
+    }
+
+    public String getAdminBaseUrl() {
+        return adminBaseUrl == null ? "" : adminBaseUrl;
+    }
+
+    public void setAdminBaseUrl(String adminBaseUrl) {
+        this.adminBaseUrl = adminBaseUrl == null ? "" : adminBaseUrl;
+    }
+
+    public String getUserBaseUrl() {
+        return userBaseUrl == null ? "" : userBaseUrl;
+    }
+
+    public void setUserBaseUrl(String userBaseUrl) {
+        this.userBaseUrl = userBaseUrl == null ? "" : userBaseUrl;
+    }
+
+    public boolean isForcePayAll() {
+        return forcePayAll == null || forcePayAll;
+    }
+
+    public void setForcePayAll(Boolean forcePayAll) {
+        this.forcePayAll = forcePayAll == null ? Boolean.TRUE : forcePayAll;
     }
 
     public LocalDateTime getUpdatedAt() {

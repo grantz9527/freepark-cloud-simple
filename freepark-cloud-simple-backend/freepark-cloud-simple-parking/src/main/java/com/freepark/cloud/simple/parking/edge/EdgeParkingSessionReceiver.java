@@ -106,6 +106,10 @@ public class EdgeParkingSessionReceiver implements EdgeInboundConsumer {
             log.debug("忽略非流水上报负载 topic={} schema={} edgeCode={}", topic, schema, edgeCode);
             return;
         }
+        if ("CLOUD".equals(textOrNull(root.path("origin")))) {
+            log.debug("忽略云端来源流水快照（下行报文不应出现在上报主题） topic={}", topic);
+            return;
+        }
         // 落库失败（RuntimeException）上抛：由连接管理器记录日志并回滚事务。
         // 注：边缘侧在 Broker 收到报文（PUBACK）后即清除待同步标记，云端落库失败
         // 只能靠日志/运维补数据，不做端到端重试（与心跳链路同一可靠性边界）。
@@ -145,20 +149,45 @@ public class EdgeParkingSessionReceiver implements EdgeInboundConsumer {
             log.warn("停车流水快照时间字段非法（entryTime/exitTime），丢弃");
             return;
         }
-        ParkingSession session = sessionRepository
-                .findByEdgeNodeCodeAndEdgeSessionId(nodeCode, edgeSessionId)
-                .orElseGet(ParkingSession::new);
+        ParkingSession session = null;
+        Long cloudId = longOrNull(root.path("cloudId"));
+        if (cloudId != null) {
+            session = sessionRepository.findById(cloudId).orElse(null);
+        }
+        if (session == null) {
+            session = sessionRepository
+                    .findByEdgeNodeCodeAndEdgeSessionId(nodeCode, edgeSessionId)
+                    .orElseGet(ParkingSession::new);
+        }
+        long incomingRevision = longOrNull(root.path("cloudRevision")) == null
+                ? 0L
+                : longOrNull(root.path("cloudRevision"));
+        boolean staleRevision = session.getId() != null
+                && session.getCloudRevision() != null
+                && session.getCloudRevision() > incomingRevision;
+        if (staleRevision
+                && lifecycleRank(status) <= lifecycleRank(session.getStatus())) {
+            log.info("忽略过期边缘流水上报 nodeCode={} edgeSessionId={} cloudRevision={} incoming={}",
+                    nodeCode, edgeSessionId, session.getCloudRevision(), incomingRevision);
+            return;
+        }
         session.setEdgeNodeCode(nodeCode);
         session.setEdgeSessionId(edgeSessionId);
-        session.setLotId(lot.getId());
-        session.setLotName(firstNonBlank(textOrNull(root.path("lotName")), lot.getName()));
-        session.setPlateNumber(plateNumber.trim().toUpperCase());
-        session.setPlateColor(parseEnum(PlateColor.class, textOrNull(root.path("plateColor"))));
-        session.setStatus(status);
-        session.setEntryTime(entryTime);
-        session.setEntryLaneName(textOrNull(root.path("entryLaneName")));
-        session.setExitTime(exitTime);
-        session.setExitLaneName(textOrNull(root.path("exitLaneName")));
+        if (staleRevision) {
+            // 云端已有更新的管理端改写，但边缘生命周期已前进（在场→出场/作废）：
+            // 只合并出场信息，保留云端已改的车牌/入场等字段，避免整单丢弃导致云端一直停在 OPEN。
+            log.info("过期修订但边缘已出场/作废，合并生命周期 nodeCode={} edgeSessionId={} {}→{}",
+                    nodeCode, edgeSessionId, session.getStatus(), status);
+            applyLifecycle(session, status, exitTime, textOrNull(root.path("exitLaneName")));
+        } else {
+            session.setLotId(lot.getId());
+            session.setLotName(firstNonBlank(textOrNull(root.path("lotName")), lot.getName()));
+            session.setPlateNumber(plateNumber.trim().toUpperCase());
+            session.setPlateColor(parseEnum(PlateColor.class, textOrNull(root.path("plateColor"))));
+            session.setEntryTime(entryTime);
+            session.setEntryLaneName(textOrNull(root.path("entryLaneName")));
+            applyLifecycle(session, status, exitTime, textOrNull(root.path("exitLaneName")));
+        }
         if (status == ParkingSessionStatus.CLOSED && session.getPayStatus() == null) {
             // 与云端关场默认一致：已出场未登记支付前视为未支付
             session.setPayStatus(ParkingPayStatus.UNPAID);
@@ -181,6 +210,24 @@ public class EdgeParkingSessionReceiver implements EdgeInboundConsumer {
         }
         log.info("已入库边缘停车流水 nodeCode={} edgeSessionId={} status={} plate={}",
                 nodeCode, edgeSessionId, status, session.getPlateNumber());
+    }
+
+    private static void applyLifecycle(ParkingSession session, ParkingSessionStatus status,
+                                       LocalDateTime exitTime, String exitLaneName) {
+        session.setStatus(status);
+        session.setExitTime(exitTime);
+        session.setExitLaneName(exitLaneName);
+    }
+
+    /** OPEN < CLOSED < VOIDED：只允许边缘把生命周期往前推，不允许用过期快照退回在场。 */
+    private static int lifecycleRank(ParkingSessionStatus status) {
+        if (status == ParkingSessionStatus.VOIDED) {
+            return 2;
+        }
+        if (status == ParkingSessionStatus.CLOSED) {
+            return 1;
+        }
+        return 0;
     }
 
     /** 流水作废时把其「待支付」订单一并取消，避免金额占用残留。 */
@@ -268,6 +315,13 @@ public class EdgeParkingSessionReceiver implements EdgeInboundConsumer {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    private static Long longOrNull(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull() || !node.isNumber()) {
+            return null;
+        }
+        return node.asLong();
     }
 
     private static String textOrNull(JsonNode node) {

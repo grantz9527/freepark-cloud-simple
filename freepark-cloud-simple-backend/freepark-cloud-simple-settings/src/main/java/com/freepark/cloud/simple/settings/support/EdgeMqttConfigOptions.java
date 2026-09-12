@@ -17,6 +17,8 @@ public final class EdgeMqttConfigOptions {
     public static final String DEFAULT_BROKER_HOST = "127.0.0.1";
     public static final int DEFAULT_BROKER_PORT = 1883;
     public static final String DEFAULT_CLIENT_ID = "freepark-cloud-edge";
+    /** 道闸指令与云端流水下发主题前缀：云端按「{前缀}/{节点编号}」下发 edge.gate.command/1 与 origin=CLOUD 的 edge.parking.session/1 */
+    public static final String DEFAULT_COMMAND_PUBLISH_PREFIX = "parking/command";
     /** 默认 QoS：至少一次，保证配置快照不丢失；整包幂等可容忍重复 */
     public static final int DEFAULT_QOS = 1;
     /** 默认配置同步周期（秒）：每 24 小时一次全量快照，测试期可在前端/接口临时调小 */
@@ -153,6 +155,23 @@ public final class EdgeMqttConfigOptions {
             throw new BizException(400, MessageKeys.EDGE_CONFIG_TOPIC_TOO_LONG);
         }
         return prefix;
+    }
+
+    /**
+     * 道闸指令发布主题前缀：空则回落 {@link #DEFAULT_COMMAND_PUBLISH_PREFIX}。
+     * 运行时只做去尾斜杠，不抛校验异常（避免缴费入账后开闸被配置脏数据打断）。
+     */
+    public static String commandPublishPrefix(String stored) {
+        if (stored == null) {
+            return DEFAULT_COMMAND_PUBLISH_PREFIX;
+        }
+        String prefix = stored.trim();
+        int end = prefix.length();
+        while (end > 0 && prefix.charAt(end - 1) == '/') {
+            end--;
+        }
+        prefix = prefix.substring(0, end);
+        return prefix.isEmpty() ? DEFAULT_COMMAND_PUBLISH_PREFIX : prefix;
     }
 
     /** 可选的凭据字段：非空时仅做长度校验 */

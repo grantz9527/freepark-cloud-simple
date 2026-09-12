@@ -91,6 +91,11 @@ export const classicMenus: MenuItem[] = [
         path: '/parking/orders'
       },
       {
+        id: 'parking-refunds',
+        titleKey: 'menu.parkingRefunds',
+        path: '/parking/refunds'
+      },
+      {
         id: 'discount-vehicles',
         titleKey: 'menu.discountVehicles',
         path: '/parking/discount-vehicles'
@@ -99,6 +104,27 @@ export const classicMenus: MenuItem[] = [
         id: 'vehicle-fee-query',
         titleKey: 'menu.vehicleFeeQuery',
         path: '/parking/fee-query'
+      }
+    ]
+  },
+  {
+    id: 'paymentMgmt',
+    titleKey: 'menu.sectionPayment',
+    children: [
+      {
+        id: 'pay-records',
+        titleKey: 'menu.payRecords',
+        path: '/payment/records'
+      },
+      {
+        id: 'pay-global-stats',
+        titleKey: 'menu.payGlobalStats',
+        path: '/payment/global-stats'
+      },
+      {
+        id: 'pay-lot-stats',
+        titleKey: 'menu.payLotStats',
+        path: '/payment/lot-stats'
       }
     ]
   },

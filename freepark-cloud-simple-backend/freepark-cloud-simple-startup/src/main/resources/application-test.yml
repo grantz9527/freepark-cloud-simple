@@ -1,0 +1,6 @@
+# 测试环境：SPRING_PROFILES_ACTIVE=test
+# 数据源等与 dev 相同的项请在部署时用环境变量覆盖，或与 dev 叠加（dev,test）
+freepark:
+  payment:
+    mock-enabled: true
+    wechat-attach: test
