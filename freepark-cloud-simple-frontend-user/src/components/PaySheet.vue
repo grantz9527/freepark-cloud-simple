@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { launchAlipay } from '../alipayLaunch'
+import { invokeAlipayWapPay } from '../alipayPay'
 import {
   closePayment,
   createPayment,
@@ -219,6 +220,28 @@ async function startPay() {
         error.value = result === 'cancel' ? t('pay.wechat.cancelled') : t('pay.wechat.invokeFailed')
         return
       }
+    }
+    if (order.method === 'ALIPAY_PAY' && !order.mock) {
+      if (!order.aliPay?.formHtml) {
+        error.value = t('pay.alipay.invokeFailed')
+        try {
+          await closePayment(order.payNo)
+        } catch {
+          // ignore
+        }
+        return
+      }
+      // 提交后浏览器跳转支付宝收银台，成功则不再 emit
+      if (!invokeAlipayWapPay(order.aliPay.formHtml)) {
+        error.value = t('pay.alipay.invokeFailed')
+        try {
+          await closePayment(order.payNo)
+        } catch {
+          // ignore
+        }
+        return
+      }
+      return
     }
     emit('created', order)
   } catch (e) {

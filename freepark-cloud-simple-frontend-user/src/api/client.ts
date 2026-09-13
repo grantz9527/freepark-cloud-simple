@@ -97,6 +97,12 @@ export interface PaymentOrder {
   items: PaymentItem[]
   /** 微信 JSAPI 调起参数（仅真实下单返回） */
   wxPay: WeChatJsapiPayParams | null
+  /** 支付宝手机网站支付表单（仅真实下单返回） */
+  aliPay: AlipayWapPayParams | null
+}
+
+export interface AlipayWapPayParams {
+  formHtml: string
 }
 
 function localeHeader(): string {
@@ -188,7 +194,8 @@ function parsePayment(body: unknown): PaymentOrder {
     transactionId: typeof raw.transactionId === 'string' ? raw.transactionId : null,
     returnUrl: typeof raw.returnUrl === 'string' && raw.returnUrl ? raw.returnUrl : null,
     items,
-    wxPay: parseWxPay(raw.wxPay)
+    wxPay: parseWxPay(raw.wxPay),
+    aliPay: parseAliPay(raw.aliPay)
   }
 }
 
@@ -203,6 +210,14 @@ function parseWxPay(value: unknown): WeChatJsapiPayParams | null {
   const paySign = typeof row.paySign === 'string' ? row.paySign : ''
   if (!appId || !timeStamp || !nonceStr || !pkg || !paySign) return null
   return { appId, timeStamp, nonceStr, package: pkg, signType, paySign }
+}
+
+function parseAliPay(value: unknown): AlipayWapPayParams | null {
+  if (!value || typeof value !== 'object') return null
+  const row = value as Record<string, unknown>
+  const formHtml = typeof row.formHtml === 'string' ? row.formHtml.trim() : ''
+  if (!formHtml) return null
+  return { formHtml }
 }
 
 /**

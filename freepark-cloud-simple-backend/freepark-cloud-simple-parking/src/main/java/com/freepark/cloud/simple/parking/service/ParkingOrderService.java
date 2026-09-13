@@ -14,9 +14,17 @@ import com.freepark.cloud.simple.parking.entity.ParkingOrderStatus;
 import com.freepark.cloud.simple.parking.entity.ParkingRefundType;
 import com.freepark.cloud.simple.parking.entity.ParkingSession;
 import com.freepark.cloud.simple.parking.entity.ParkingSessionStatus;
+import com.freepark.cloud.simple.parking.entity.PaymentMethod;
+import com.freepark.cloud.simple.parking.entity.PaymentOrder;
+import com.freepark.cloud.simple.parking.entity.PaymentOrderStatus;
 import com.freepark.cloud.simple.parking.repository.ParkingOrderRefundRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingOrderRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingSessionRepository;
+import com.freepark.cloud.simple.parking.repository.PaymentOrderRepository;
+import com.freepark.cloud.simple.parking.service.alipay.AlipayRefundClient;
+import com.freepark.cloud.simple.parking.service.wechat.WeChatRefundClient;
+import com.freepark.cloud.simple.settings.service.AlipayConfigService;
+import com.freepark.cloud.simple.settings.service.WeChatConfigService;
 import com.freepark.cloud.simple.user.entity.UserAccount;
 import com.freepark.cloud.simple.user.service.AdminGuard;
 import jakarta.persistence.criteria.Predicate;
@@ -45,7 +53,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * 订单金额 = 当前应收 − 流水累计已支付 − 该流水未支付/待支付订单合计，
  * 保证在场车辆多次缴费「第二次仅需支付再次产生的金额」，也避免并发请求重复下单重复计费。
  * <p>订单生命周期：PENDING（待支付，金额占用可收口径）→ PAID（登记收款入账到流水累计已支付）
- * → PARTIAL_REFUND / REFUNDED（部分或全部退款，回冲流水累计已支付），
+ * → PARTIAL_REFUND / REFUNDED（部分或全部退款：线上单先调微信/支付宝退款，再回冲流水累计已支付），
  * 或 CANCELLED（仅待支付可取消，释放占用）。
  */
 @Service
@@ -58,6 +66,11 @@ public class ParkingOrderService {
     private final ParkingSessionRepository sessions;
     private final ParkingSessionService sessionService;
     private final PayRecordService payRecordService;
+    private final PaymentOrderRepository payments;
+    private final WeChatConfigService weChatConfig;
+    private final AlipayConfigService alipayConfig;
+    private final WeChatRefundClient weChatRefund;
+    private final AlipayRefundClient alipayRefund;
     private final AdminGuard adminGuard;
     private final SiteZoneProvider siteZoneProvider;
 
@@ -66,6 +79,11 @@ public class ParkingOrderService {
                                ParkingSessionRepository sessions,
                                ParkingSessionService sessionService,
                                PayRecordService payRecordService,
+                               PaymentOrderRepository payments,
+                               WeChatConfigService weChatConfig,
+                               AlipayConfigService alipayConfig,
+                               WeChatRefundClient weChatRefund,
+                               AlipayRefundClient alipayRefund,
                                AdminGuard adminGuard,
                                SiteZoneProvider siteZoneProvider) {
         this.orders = orders;
@@ -73,6 +91,11 @@ public class ParkingOrderService {
         this.sessions = sessions;
         this.sessionService = sessionService;
         this.payRecordService = payRecordService;
+        this.payments = payments;
+        this.weChatConfig = weChatConfig;
+        this.alipayConfig = alipayConfig;
+        this.weChatRefund = weChatRefund;
+        this.alipayRefund = alipayRefund;
         this.adminGuard = adminGuard;
         this.siteZoneProvider = siteZoneProvider;
     }
@@ -206,7 +229,8 @@ public class ParkingOrderService {
 
     /**
      * 退款：已支付或部分退款订单可继续退；{@code amountYuan} 缺省则按剩余可退全额退款。
-     * 退款金额回冲关联流水累计已支付。可多次部分退款，直至剩余为 0 变为已全额退款。
+     * 线上微信/支付宝（非 mock）先调渠道退款，成功后再回冲关联流水累计已支付。
+     * 可多次部分退款，直至剩余为 0 变为已全额退款。现金/联调单仅本地入账。
      */
     @Transactional
     public ParkingOrderView refundOrder(Long orderId, RefundParkingOrderRequest request) {
@@ -234,6 +258,10 @@ public class ParkingOrderService {
             }
             order.setRefundReason(reason);
         }
+
+        String refundNo = nextRefundNo();
+        refundViaChannelIfNeeded(order, amount, refundNo, reason);
+
         order.setRefundedYuan(order.refundedOrZero().add(amount));
         order.setRefundTime(SiteZoneTimes.nowUtc());
         BigDecimal remainingAfter = order.getAmountYuan().subtract(order.refundedOrZero());
@@ -246,17 +274,65 @@ public class ParkingOrderService {
             order.setStatus(ParkingOrderStatus.PARTIAL_REFUND);
         }
         orders.save(order);
-        ParkingOrderRefund refund = refunds.save(buildRefundRecord(order, operator, amount, remainingAfter, reason));
+        ParkingOrderRefund refund = refunds.save(
+                buildRefundRecord(order, operator, refundNo, amount, remainingAfter, reason));
         payRecordService.recordRefund(order, refund, operator);
         sessionService.applyOrderRefund(order.getSessionId(), amount);
         return ParkingOrderView.from(order);
     }
 
+    /**
+     * 线上真实支付：按缴款单渠道发起退款；现金单（无 paymentNo）与 mock 单跳过渠道。
+     */
+    private void refundViaChannelIfNeeded(ParkingOrder order, BigDecimal amount,
+                                          String refundNo, String reason) {
+        if (!StringUtils.hasText(order.getPaymentNo())) {
+            return;
+        }
+        PaymentOrder payment = payments.findByPayNo(order.getPaymentNo().trim())
+                .orElseThrow(() -> new BizException(400, MessageKeys.PAYMENT_NOT_FOUND));
+        if (payment.getStatus() != PaymentOrderStatus.PAID) {
+            throw new BizException(400, MessageKeys.PARKING_ORDER_REFUND_CHANNEL_UNSUPPORTED);
+        }
+        if (payment.isMock()) {
+            return;
+        }
+        if (payment.getMethod() == PaymentMethod.WECHAT_PAY) {
+            var runtime = weChatConfig.loadJsapiRuntime();
+            if (!runtime.ready()) {
+                throw new BizException(400, MessageKeys.PAYMENT_WECHAT_NOT_CONFIGURED);
+            }
+            weChatRefund.refund(
+                    runtime,
+                    payment.getPayNo(),
+                    refundNo,
+                    amount,
+                    payment.getAmountYuan(),
+                    reason);
+            return;
+        }
+        if (payment.getMethod() == PaymentMethod.ALIPAY_PAY) {
+            var runtime = alipayConfig.loadRuntime();
+            if (!runtime.readyToPay()) {
+                throw new BizException(400, MessageKeys.PAYMENT_ALIPAY_NOT_CONFIGURED);
+            }
+            alipayRefund.refund(
+                    runtime,
+                    payment.getPayNo(),
+                    payment.getTransactionId(),
+                    refundNo,
+                    amount,
+                    reason);
+            return;
+        }
+        throw new BizException(400, MessageKeys.PARKING_ORDER_REFUND_CHANNEL_UNSUPPORTED);
+    }
+
     private ParkingOrderRefund buildRefundRecord(ParkingOrder order, UserAccount operator,
-                                                 BigDecimal amount, BigDecimal remainingAfter,
-                                                 String reason) {
+                                                 String refundNo, BigDecimal amount,
+                                                 BigDecimal remainingAfter, String reason) {
         ParkingOrderRefund record = new ParkingOrderRefund();
-        record.setRefundNo(nextRefundNo());
+        record.setRefundNo(refundNo);
         record.setOrderId(order.getId());
         record.setOrderNo(order.getOrderNo());
         record.setSessionId(order.getSessionId());

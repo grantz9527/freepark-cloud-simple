@@ -4,7 +4,10 @@ import com.freepark.cloud.simple.common.i18n.BizException;
 import com.freepark.cloud.simple.common.i18n.MessageKeys;
 
 import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.interfaces.RSAPublicKey;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
@@ -24,6 +27,7 @@ public final class AlipayConfigOptions {
 
     private static final String BEGIN_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----";
     private static final String END_PRIVATE_KEY = "-----END PRIVATE KEY-----";
+    private static final String BEGIN_RSA_PRIVATE_KEY = "-----BEGIN RSA PRIVATE KEY-----";
     private static final String BEGIN_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----";
     private static final String END_PUBLIC_KEY = "-----END PUBLIC KEY-----";
 
@@ -43,20 +47,43 @@ public final class AlipayConfigOptions {
     }
 
     /**
-     * 应用私钥文本：RSA2 私钥（PKCS#8 PEM）。留空返回 null 表示保持不变。
+     * 应用私钥文本：RSA2（PKCS#8）。支付宝密钥工具导出的多为无头尾裸 Base64 .txt，
+     * 也接受带 {@code BEGIN PRIVATE KEY} 的 PEM。留空返回 null 表示保持不变。
+     *
+     * <p>不支持 PKCS#1（{@code BEGIN RSA PRIVATE KEY}）；请在密钥工具中选择 PKCS8 格式。</p>
      */
     public static String validateAppPrivateKeyPem(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String pem = value.trim();
-        if (!pem.startsWith(BEGIN_PRIVATE_KEY) || !pem.endsWith(END_PRIVATE_KEY)) {
+        String content = stripBom(value).trim();
+        if (content.length() > MAX_KEY_TEXT_LENGTH) {
             throw new BizException(400, MessageKeys.ALIPAY_PRIVATE_KEY_INVALID);
         }
-        if (pem.length() > MAX_KEY_TEXT_LENGTH) {
+        if (content.contains(BEGIN_RSA_PRIVATE_KEY)) {
             throw new BizException(400, MessageKeys.ALIPAY_PRIVATE_KEY_INVALID);
         }
-        return pem;
+        String body = content;
+        if (body.startsWith(BEGIN_PRIVATE_KEY)) {
+            body = body.replace(BEGIN_PRIVATE_KEY, "").replace(END_PRIVATE_KEY, "");
+        }
+        String compact = body.replaceAll("\\s", "");
+        if (compact.isEmpty()) {
+            throw new BizException(400, MessageKeys.ALIPAY_PRIVATE_KEY_INVALID);
+        }
+        try {
+            byte[] der = Base64.getDecoder().decode(compact);
+            PrivateKey key = KeyFactory.getInstance("RSA")
+                    .generatePrivate(new PKCS8EncodedKeySpec(der));
+            if (!(key instanceof RSAPrivateCrtKey)) {
+                throw new IllegalArgumentException();
+            }
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(400, MessageKeys.ALIPAY_PRIVATE_KEY_INVALID);
+        }
+        return content;
     }
 
     /**
@@ -67,7 +94,7 @@ public final class AlipayConfigOptions {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String content = value.trim();
+        String content = stripBom(value).trim();
         if (content.length() > MAX_KEY_TEXT_LENGTH) {
             throw new BizException(400, MessageKeys.ALIPAY_PUBLIC_KEY_INVALID);
         }
@@ -90,5 +117,12 @@ public final class AlipayConfigOptions {
             throw new BizException(400, MessageKeys.ALIPAY_PUBLIC_KEY_INVALID);
         }
         return content;
+    }
+
+    private static String stripBom(String value) {
+        if (value != null && !value.isEmpty() && value.charAt(0) == '\uFEFF') {
+            return value.substring(1);
+        }
+        return value;
     }
 }

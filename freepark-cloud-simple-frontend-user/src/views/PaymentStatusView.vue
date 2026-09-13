@@ -58,7 +58,13 @@ const showAlipayGuide = computed(
     !order.value?.mock
 )
 const showMockConfirm = computed(
-  () => !loading.value && isPending.value && !isTimedOut.value && !!order.value?.mock
+  () =>
+    !loading.value &&
+    isPending.value &&
+    !isTimedOut.value &&
+    !!order.value?.mock &&
+    // 支付宝已接真实支付，结果页不应再出现联调「确认已支付」
+    order.value.method !== 'ALIPAY_PAY'
 )
 const confirming = ref(false)
 const handoffPageUrl = computed(() => {
@@ -371,7 +377,12 @@ onUnmounted(() => {
         :page-url="handoffPageUrl"
       />
 
-      <button v-if="isPaid || isClosed || isTimedOut" class="btn btn-primary" type="button" @click="goHome">
+      <button
+        v-if="isPaid || isClosed || isTimedOut || (isPending && order?.method === 'ALIPAY_PAY' && order.mock)"
+        class="btn btn-primary"
+        type="button"
+        @click="goHome"
+      >
         {{ t('pay.wait.back') }}
       </button>
       <button v-else-if="error && !order" class="btn btn-primary" type="button" @click="goHome">

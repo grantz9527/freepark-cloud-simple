@@ -21,6 +21,7 @@ import java.util.List;
  * @param returnUrl     用户端缴款结果页（用户端基础地址 + /pay/{payNo}，供渠道同步跳回）
  * @param items         按流水拆分的明细
  * @param wxPay         微信 JSAPI 调起参数（仅真实微信下单返回；查询接口为 null）
+ * @param aliPay        支付宝手机网站支付表单（仅真实支付宝下单返回；查询接口为 null）
  */
 public record PaymentOrderView(
         String payNo,
@@ -34,18 +35,25 @@ public record PaymentOrderView(
         LocalDateTime payTime,
         String returnUrl,
         List<PaymentItemView> items,
-        WeChatJsapiPayView wxPay) {
+        WeChatJsapiPayView wxPay,
+        AlipayWapPayView aliPay) {
 
     public static PaymentOrderView from(PaymentOrder payment, List<PaymentItemView> items) {
-        return from(payment, items, null, null);
+        return from(payment, items, null, null, null);
     }
 
     public static PaymentOrderView from(PaymentOrder payment, List<PaymentItemView> items, String returnUrl) {
-        return from(payment, items, returnUrl, null);
+        return from(payment, items, returnUrl, null, null);
     }
 
     public static PaymentOrderView from(PaymentOrder payment, List<PaymentItemView> items,
                                         String returnUrl, WeChatJsapiPayView wxPay) {
+        return from(payment, items, returnUrl, wxPay, null);
+    }
+
+    public static PaymentOrderView from(PaymentOrder payment, List<PaymentItemView> items,
+                                        String returnUrl, WeChatJsapiPayView wxPay,
+                                        AlipayWapPayView aliPay) {
         return new PaymentOrderView(
                 payment.getPayNo(),
                 payment.getPlateNumber(),
@@ -58,6 +66,7 @@ public record PaymentOrderView(
                 payment.getPayTime(),
                 returnUrl,
                 items,
-                wxPay);
+                wxPay,
+                aliPay);
     }
 }

@@ -159,6 +159,7 @@ const zh: Dict = {
   'pay.alipay.openApp': '在支付宝中打开',
   'pay.alipay.copyLink': '复制链接',
   'pay.alipay.copied': '已复制',
+  'pay.alipay.invokeFailed': '无法打开支付宝收银台，请检查支付宝配置后重试',
 
   /* 支付结果轮询页 */
   'pay.wait.title': '支付结果',
@@ -328,6 +329,7 @@ const en: Dict = {
   'pay.alipay.openApp': 'Open in Alipay',
   'pay.alipay.copyLink': 'Copy link',
   'pay.alipay.copied': 'Copied',
+  'pay.alipay.invokeFailed': 'Could not open the Alipay checkout. Check Alipay settings and try again.',
 
   'pay.wait.title': 'Payment status',
   'pay.wait.pending': 'Confirming payment',

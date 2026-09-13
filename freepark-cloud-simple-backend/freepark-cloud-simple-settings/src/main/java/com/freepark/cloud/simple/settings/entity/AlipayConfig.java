@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
  * <p>字段用途：</p>
  * <ul>
  *   <li>应用 AppID：支付宝开放平台应用的唯一标识，同时用于用户授权与收单</li>
- *   <li>应用私钥：支付请求签名使用（RSA2），由文件上传解析</li>
+ *   <li>应用私钥：支付请求签名使用（RSA2 PKCS#8，支持密钥工具裸 Base64 或 PEM），由文件上传解析</li>
  *   <li>支付宝公钥：校验支付宝响应与异步通知的签名（公钥模式）</li>
  * </ul>
  *
@@ -39,7 +39,7 @@ public class AlipayConfig {
     @Column(name = "app_id", nullable = false, length = 32)
     private String appId = "";
 
-    /** 应用私钥文本（RSA2，PKCS#8 PEM；敏感，响应中不回显，由文件上传解析） */
+    /** 应用私钥文本（RSA2，PKCS#8；密钥工具多为裸 Base64，也可为 PEM；敏感，响应中不回显，由文件上传解析） */
     @Column(name = "app_private_key_pem", columnDefinition = "TEXT")
     private String appPrivateKeyPem;
 

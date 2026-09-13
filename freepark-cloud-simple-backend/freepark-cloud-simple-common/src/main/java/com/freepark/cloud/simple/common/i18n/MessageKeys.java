@@ -48,6 +48,7 @@ public final class MessageKeys {
     public static final String PARKING_ORDER_BAD_STATE = "parking.order.badState";
     public static final String PARKING_ORDER_REFUND_INVALID_AMOUNT = "parking.order.refund.invalidAmount";
     public static final String PARKING_ORDER_REFUND_EXCEEDS = "parking.order.refund.exceeds";
+    public static final String PARKING_ORDER_REFUND_CHANNEL_UNSUPPORTED = "parking.order.refund.channelUnsupported";
 
     public static final String PAYMENT_METHOD_NOT_ALLOWED = "payment.methodNotAllowed";
     public static final String PAYMENT_GATEWAY_UNAVAILABLE = "payment.gatewayUnavailable";
@@ -57,6 +58,10 @@ public final class MessageKeys {
     public static final String PAYMENT_WECHAT_OAUTH_REQUIRED = "payment.wechatOauthRequired";
     public static final String PAYMENT_WECHAT_OAUTH_FAILED = "payment.wechatOauthFailed";
     public static final String PAYMENT_WECHAT_ORDER_FAILED = "payment.wechatOrderFailed";
+    public static final String PAYMENT_WECHAT_REFUND_FAILED = "payment.wechatRefundFailed";
+    public static final String PAYMENT_ALIPAY_NOT_CONFIGURED = "payment.alipayNotConfigured";
+    public static final String PAYMENT_ALIPAY_ORDER_FAILED = "payment.alipayOrderFailed";
+    public static final String PAYMENT_ALIPAY_REFUND_FAILED = "payment.alipayRefundFailed";
     public static final String PAYMENT_SESSIONS_REQUIRED = "payment.sessionsRequired";
     public static final String PAYMENT_SESSIONS_INVALID = "payment.sessionsInvalid";
     public static final String PAY_LOT_STATS_LOT_REQUIRED = "pay.lotStats.lotRequired";

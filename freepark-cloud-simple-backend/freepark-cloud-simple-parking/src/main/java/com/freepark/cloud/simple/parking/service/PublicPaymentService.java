@@ -4,6 +4,7 @@ import com.freepark.cloud.simple.common.i18n.BizException;
 import com.freepark.cloud.simple.common.i18n.MessageKeys;
 import com.freepark.cloud.simple.common.pay.PublicOriginResolver;
 import com.freepark.cloud.simple.common.time.SiteZoneTimes;
+import com.freepark.cloud.simple.parking.dto.AlipayWapPayView;
 import com.freepark.cloud.simple.parking.dto.CreatePaymentRequest;
 import com.freepark.cloud.simple.parking.dto.PayableQuoteView;
 import com.freepark.cloud.simple.parking.dto.PaymentItemView;
@@ -17,8 +18,11 @@ import com.freepark.cloud.simple.parking.entity.PlateColor;
 import com.freepark.cloud.simple.parking.event.PaymentSettledEvent;
 import com.freepark.cloud.simple.parking.repository.ParkingOrderRepository;
 import com.freepark.cloud.simple.parking.repository.PaymentOrderRepository;
+import com.freepark.cloud.simple.parking.service.alipay.AlipayWapPayClient;
 import com.freepark.cloud.simple.parking.service.wechat.WeChatJsapiPayClient;
+import com.freepark.cloud.simple.settings.dto.AlipayPayRuntimeConfig;
 import com.freepark.cloud.simple.settings.dto.WeChatJsapiRuntimeConfig;
+import com.freepark.cloud.simple.settings.service.AlipayConfigService;
 import com.freepark.cloud.simple.settings.service.SystemSettingsService;
 import com.freepark.cloud.simple.settings.service.WeChatConfigService;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,8 +52,8 @@ import java.util.concurrent.ThreadLocalRandom;
  * 下单时把该车牌的未结流水按流水拆成多笔停车订单（{@code paymentNo} 指向本缴款单），
  * 缴款成功后再逐笔入账到对应流水的累计已缴，实现「一次缴款 = 多条流水的多笔订单」。
  * <p>
- * 入账来源：本地联调确认（{@code freepark.payment.mock-enabled}）、微信 JSAPI 异步通知。
- * 微信支付凭据齐全时走真实 JSAPI；否则在 mock 开启时走联调确认。
+ * 入账来源：本地联调确认（{@code freepark.payment.mock-enabled}）、微信 / 支付宝异步通知。
+ * 微信或支付宝凭据齐全时走真实渠道；否则在 mock 开启时走联调确认。
  */
 @Service
 public class PublicPaymentService {
@@ -65,6 +69,8 @@ public class PublicPaymentService {
     private final PublicOriginResolver publicOrigin;
     private final WeChatConfigService weChatConfig;
     private final WeChatJsapiPayClient weChatJsapi;
+    private final AlipayConfigService alipayConfig;
+    private final AlipayWapPayClient alipayWap;
     private final ApplicationEventPublisher events;
     private final Environment environment;
 
@@ -88,6 +94,8 @@ public class PublicPaymentService {
                                 PublicOriginResolver publicOrigin,
                                 WeChatConfigService weChatConfig,
                                 WeChatJsapiPayClient weChatJsapi,
+                                AlipayConfigService alipayConfig,
+                                AlipayWapPayClient alipayWap,
                                 ApplicationEventPublisher events,
                                 Environment environment) {
         this.payments = payments;
@@ -99,6 +107,8 @@ public class PublicPaymentService {
         this.publicOrigin = publicOrigin;
         this.weChatConfig = weChatConfig;
         this.weChatJsapi = weChatJsapi;
+        this.alipayConfig = alipayConfig;
+        this.alipayWap = alipayWap;
         this.events = events;
         this.environment = environment;
     }
@@ -117,23 +127,33 @@ public class PublicPaymentService {
         }
 
         WeChatJsapiRuntimeConfig wechatRuntime = weChatConfig.loadJsapiRuntime();
-        boolean wechatReady = method == PaymentMethod.WECHAT_PAY && wechatRuntime.ready();
+        AlipayPayRuntimeConfig alipayRuntime = alipayConfig.loadRuntime();
         String wxCode = request == null ? null : request.wxCode();
 
-        // 商户凭据齐全时必须走真实 JSAPI（需要 wxCode）；凭据不全且开启 mock 时才联调
-        boolean wantRealWechat = wechatReady;
-        boolean useMock = !wantRealWechat;
-        if (wantRealWechat && !StringUtils.hasText(wxCode)) {
-            throw new BizException(400, MessageKeys.PAYMENT_WECHAT_OAUTH_REQUIRED);
-        }
-        if (useMock && !mockEnabled) {
-            if (method == PaymentMethod.WECHAT_PAY) {
+        // 支付宝不走 mock：凭据不全直接失败。微信凭据不全时可在 mock 开启时联调。
+        boolean wantRealAlipay = false;
+        boolean wantRealWechat = false;
+        boolean useMock = false;
+        if (method == PaymentMethod.ALIPAY_PAY) {
+            if (!alipayRuntime.readyToPay()) {
+                throw new BizException(400, MessageKeys.PAYMENT_ALIPAY_NOT_CONFIGURED);
+            }
+            wantRealAlipay = true;
+        } else if (method == PaymentMethod.WECHAT_PAY) {
+            wantRealWechat = wechatRuntime.ready();
+            useMock = !wantRealWechat;
+            if (wantRealWechat && !StringUtils.hasText(wxCode)) {
+                throw new BizException(400, MessageKeys.PAYMENT_WECHAT_OAUTH_REQUIRED);
+            }
+            if (useMock && !mockEnabled) {
                 throw new BizException(400, MessageKeys.PAYMENT_WECHAT_NOT_CONFIGURED);
             }
-            throw new BizException(400, MessageKeys.PAYMENT_GATEWAY_UNAVAILABLE);
+        } else {
+            throw new BizException(400, MessageKeys.PAYMENT_METHOD_NOT_ALLOWED);
         }
 
         WeChatJsapiPayView wxPay = null;
+        AlipayWapPayView aliPay = null;
         String openid = null;
         if (wantRealWechat) {
             openid = weChatJsapi.exchangeOpenId(wechatRuntime, wxCode);
@@ -180,8 +200,21 @@ public class PublicPaymentService {
             wxPay = weChatJsapi.prepay(
                     wechatRuntime, payment.getPayNo(), description, attach, total, openid, notifyUrl);
         }
+        if (wantRealAlipay) {
+            String notifyUrl = alipayConfig.effectiveNotifyUrl(publicOrigin.alipayNotifyUrl(http));
+            if (!StringUtils.hasText(notifyUrl)) {
+                throw new BizException(400, MessageKeys.PAYMENT_ALIPAY_NOT_CONFIGURED);
+            }
+            String returnUrl = publicOrigin.userPayReturnUrl(http, payment.getPayNo());
+            if (!StringUtils.hasText(returnUrl)) {
+                throw new BizException(400, MessageKeys.PAYMENT_ALIPAY_NOT_CONFIGURED);
+            }
+            String subject = "停车费 " + plate;
+            aliPay = alipayWap.pagePay(
+                    alipayRuntime, payment.getPayNo(), subject, total, notifyUrl, returnUrl);
+        }
 
-        return toView(payment, items, http, wxPay);
+        return toView(payment, items, http, wxPay, aliPay);
     }
 
     /** 查询缴款单（含按流水拆分的明细），供用户端展示进行中/结果。 */
@@ -328,12 +361,19 @@ public class PublicPaymentService {
     }
 
     private PaymentOrderView toView(PaymentOrder payment, HttpServletRequest http) {
-        return toView(payment, loadItems(payment.getPayNo()), http, null);
+        return toView(payment, loadItems(payment.getPayNo()), http, null, null);
     }
 
     private PaymentOrderView toView(PaymentOrder payment, List<PaymentItemView> items,
                                     HttpServletRequest http, WeChatJsapiPayView wxPay) {
-        return PaymentOrderView.from(payment, items, publicOrigin.userPayReturnUrl(http, payment.getPayNo()), wxPay);
+        return toView(payment, items, http, wxPay, null);
+    }
+
+    private PaymentOrderView toView(PaymentOrder payment, List<PaymentItemView> items,
+                                    HttpServletRequest http, WeChatJsapiPayView wxPay,
+                                    AlipayWapPayView aliPay) {
+        return PaymentOrderView.from(
+                payment, items, publicOrigin.userPayReturnUrl(http, payment.getPayNo()), wxPay, aliPay);
     }
 
     private PaymentOrder requirePayment(String payNo) {

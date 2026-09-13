@@ -134,7 +134,7 @@ public class PaymentNotifyService {
     public boolean handleAlipay(Map<String, String> params) {
         AlipayPayRuntimeConfig config = alipayConfig.loadRuntime();
         if (!config.ready()) {
-            log.warn("支付宝回调：应用公钥未配置");
+            log.warn("支付宝回调：AppID 或支付宝公钥未配置");
             return false;
         }
         if (params == null || params.isEmpty()) {

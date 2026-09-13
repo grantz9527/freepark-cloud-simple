@@ -17,18 +17,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyFactory;
-import java.security.PrivateKey;
-import java.security.interfaces.RSAPrivateCrtKey;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.util.Base64;
 
 /**
  * 支付宝支付配置服务：单例读取/保存，仅超级管理员可修改。
  *
  * <p>密钥契约：各类密钥凭据不回显；保存时留空或 null 表示保持不变。
- * 应用私钥（RSA2，PKCS#8 PEM）与支付宝公钥通过文件上传接口提交，
- * 由后端解析并校验密钥格式后保存。</p>
+ * 应用私钥（RSA2，PKCS#8；支持密钥工具导出的裸 Base64 .txt 或 PEM）与支付宝公钥
+ * 通过文件上传接口提交，由后端解析并校验密钥格式后保存。</p>
  */
 @Service
 public class AlipayConfigService {
@@ -63,13 +58,14 @@ public class AlipayConfigService {
     }
 
     /**
-     * 支付回调验签用的运行时凭据（无登录，仅供渠道通知处理读取）。
+     * 支付宝运行时凭据（无登录）：下单签名与异步通知验签共用。
      */
     @Transactional(readOnly = true)
     public AlipayPayRuntimeConfig loadRuntime() {
         return repository.findById(AlipayConfig.SINGLETON_ID)
                 .map(config -> new AlipayPayRuntimeConfig(
                         blankToEmpty(config.getAppId()),
+                        blankToEmpty(config.getAppPrivateKeyPem()),
                         blankToEmpty(config.getAlipayPublicKey())))
                 .orElseGet(AlipayPayRuntimeConfig::empty);
     }
@@ -98,10 +94,9 @@ public class AlipayConfigService {
         MultipartFile privateKeyFile = request.appPrivateKeyFile();
         MultipartFile publicKeyFile = request.alipayPublicKeyFile();
         if (privateKeyFile != null && !privateKeyFile.isEmpty()) {
-            String pem = AlipayConfigOptions.validateAppPrivateKeyPem(readFileText(privateKeyFile));
-            if (pem != null) {
-                verifyRsaPrivateKey(pem);
-                config.setAppPrivateKeyPem(pem);
+            String privateKey = AlipayConfigOptions.validateAppPrivateKeyPem(readFileText(privateKeyFile));
+            if (privateKey != null) {
+                config.setAppPrivateKeyPem(privateKey);
             }
         }
         if (publicKeyFile != null && !publicKeyFile.isEmpty()) {
@@ -117,28 +112,6 @@ public class AlipayConfigService {
             return new String(file.getBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new BizException(400, MessageKeys.ALIPAY_KEY_READ_FAILED);
-        }
-    }
-
-    /**
-     * 应用私钥格式校验：必须能按 PKCS#8 解析为 RSA 私钥（RSA2 签名密钥）。
-     */
-    private void verifyRsaPrivateKey(String keyPem) {
-        try {
-            String body = keyPem
-                    .replaceAll("-----BEGIN PRIVATE KEY-----", "")
-                    .replaceAll("-----END PRIVATE KEY-----", "")
-                    .replaceAll("\\s", "");
-            byte[] der = Base64.getDecoder().decode(body);
-            PrivateKey key = KeyFactory.getInstance("RSA")
-                    .generatePrivate(new PKCS8EncodedKeySpec(der));
-            if (!(key instanceof RSAPrivateCrtKey)) {
-                throw new IllegalArgumentException("Not an RSA private key");
-            }
-        } catch (BizException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BizException(400, MessageKeys.ALIPAY_PRIVATE_KEY_INVALID);
         }
     }
 
