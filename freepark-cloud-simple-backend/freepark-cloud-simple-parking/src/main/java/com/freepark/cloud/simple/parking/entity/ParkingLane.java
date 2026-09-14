@@ -54,6 +54,29 @@ public class ParkingLane {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    /**
+     * 通道当前「等待缴费离场」快照：仅保留该通道最新一次识别算费。
+     * 识别算费会覆盖或清空；缴费开闸只认欠费拦截且仍在时效内的这条记录。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "wait_reason", length = 32)
+    private InterceptRuleType waitReason;
+
+    @Column(name = "wait_plate_number", length = 32)
+    private String waitPlateNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "wait_plate_color", length = 32)
+    private PlateColor waitPlateColor;
+
+    /** 该次识别时刻（UTC 锚点） */
+    @Column(name = "wait_recognized_at")
+    private LocalDateTime waitRecognizedAt;
+
+    /** 边缘本地识别 ID（可空，开闸指令原样带回便于对闸） */
+    @Column(name = "wait_recognition_id", length = 64)
+    private String waitRecognitionId;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -126,6 +149,65 @@ public class ParkingLane {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public InterceptRuleType getWaitReason() {
+        return waitReason;
+    }
+
+    public void setWaitReason(InterceptRuleType waitReason) {
+        this.waitReason = waitReason;
+    }
+
+    public String getWaitPlateNumber() {
+        return waitPlateNumber;
+    }
+
+    public void setWaitPlateNumber(String waitPlateNumber) {
+        this.waitPlateNumber = waitPlateNumber;
+    }
+
+    public PlateColor getWaitPlateColor() {
+        return waitPlateColor;
+    }
+
+    public void setWaitPlateColor(PlateColor waitPlateColor) {
+        this.waitPlateColor = waitPlateColor;
+    }
+
+    public LocalDateTime getWaitRecognizedAt() {
+        return waitRecognizedAt;
+    }
+
+    public void setWaitRecognizedAt(LocalDateTime waitRecognizedAt) {
+        this.waitRecognizedAt = waitRecognizedAt;
+    }
+
+    public String getWaitRecognitionId() {
+        return waitRecognitionId;
+    }
+
+    public void setWaitRecognitionId(String waitRecognitionId) {
+        this.waitRecognitionId = waitRecognitionId;
+    }
+
+    /** 记下该通道最新一次欠费拦截识别（覆盖旧等待）。 */
+    public void markArrearsWait(String plateNumber, PlateColor plateColor,
+                               LocalDateTime recognizedAt, String recognitionId) {
+        this.waitReason = InterceptRuleType.ARREARS;
+        this.waitPlateNumber = plateNumber;
+        this.waitPlateColor = plateColor;
+        this.waitRecognizedAt = recognizedAt;
+        this.waitRecognitionId = recognitionId;
+    }
+
+    /** 新识别未欠费拦截，或已开闸：清空等待，避免误开后车。 */
+    public void clearWait() {
+        this.waitReason = null;
+        this.waitPlateNumber = null;
+        this.waitPlateColor = null;
+        this.waitRecognizedAt = null;
+        this.waitRecognitionId = null;
     }
 
     public LocalDateTime getCreatedAt() {

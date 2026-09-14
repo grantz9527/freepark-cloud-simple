@@ -40,8 +40,10 @@ public class WebAuthConfig implements WebMvcConfigurer {
     private List<String> excludeList() {
         List<String> paths = new ArrayList<>();
         paths.add("/api/user/login");
-        // 边缘节点算费接口：边缘按车牌查询欠费金额，无云端账号体系，需免鉴权开放
+        // 边缘节点算费接口：边缘按车牌查询欠费金额（识别路径可带通道记下缴费等待）
         paths.add("/api/edge/arrears-quote");
+        // 兼容旧边缘显式上报通道等待（现已由算费接口兼记，可不再调用）
+        paths.add("/api/edge/lane-wait");
         // C 端公开查询（用户端网页按车牌查费）：免鉴权，仅暴露 /api/public 命名空间
         paths.add("/api/public/**");
         if (excludePaths != null && !excludePaths.isBlank()) {

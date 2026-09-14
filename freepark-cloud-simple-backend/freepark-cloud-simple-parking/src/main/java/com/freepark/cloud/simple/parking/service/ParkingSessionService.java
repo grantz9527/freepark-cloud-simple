@@ -14,7 +14,9 @@ import com.freepark.cloud.simple.parking.dto.PlateFeeQuoteView;
 import com.freepark.cloud.simple.parking.dto.UpdateParkingSessionRequest;
 import com.freepark.cloud.simple.parking.dto.VehicleArrearsResult;
 import com.freepark.cloud.simple.parking.entity.DiscountVehicle;
+import com.freepark.cloud.simple.parking.entity.LaneType;
 import com.freepark.cloud.simple.parking.entity.LotArrearsScope;
+import com.freepark.cloud.simple.parking.entity.ParkingLane;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.entity.ParkingOrder;
 import com.freepark.cloud.simple.parking.entity.ParkingOrderStatus;
@@ -23,6 +25,7 @@ import com.freepark.cloud.simple.parking.entity.ParkingSession;
 import com.freepark.cloud.simple.parking.entity.ParkingSessionStatus;
 import com.freepark.cloud.simple.parking.entity.PlateColor;
 import com.freepark.cloud.simple.parking.event.ParkingSessionChangedEvent;
+import com.freepark.cloud.simple.parking.event.PublicPlateFeeSnapshotEvent;
 import com.freepark.cloud.simple.parking.repository.DiscountVehicleRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingOrderRepository;
@@ -32,6 +35,8 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -53,6 +58,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -63,6 +69,8 @@ import java.util.Set;
  */
 @Service
 public class ParkingSessionService {
+
+    private static final Logger log = LoggerFactory.getLogger(ParkingSessionService.class);
 
     private static final int MAX_PAGE_SIZE = 100;
     private static final int MAX_PLATE_LENGTH = 20;
@@ -216,7 +224,7 @@ public class ParkingSessionService {
      *   <li>返回 {@code colors}：该车牌实际存在的颜色清单，便于前端提示可切换的颜色；</li>
      *   <li>{@code totalAmount} 合计口径与 {@link #quoteArrearsAmount(String, String)} 一致。</li>
      * </ul>
-     * 只读查询，不修改任何快照。
+     * 只读查询并立即返回；命中流水的应收快照在事务提交后异步回写，不拖慢响应。
      */
     @Transactional(readOnly = true)
     public PlateFeeQuoteView queryPublicPlateFee(String plateNumber, PlateColor plateColor) {
@@ -225,11 +233,66 @@ public class ParkingSessionService {
         LocalDateTime now = SiteZoneTimes.nowUtc();
         List<PlateFeeItemView> items = new ArrayList<>(snapshot.entries().size());
         BigDecimal total = BigDecimal.ZERO;
+        List<Long> sessionIds = new ArrayList<>(snapshot.entries().size());
         for (PlateFeeEntry entry : snapshot.entries()) {
             items.add(toPlateFeeItem(entry.session(), entry.ongoing(), entry.amount(), now));
             total = total.add(entry.amount());
+            if (entry.session().getId() != null) {
+                sessionIds.add(entry.session().getId());
+            }
+        }
+        if (!sessionIds.isEmpty()) {
+            events.publishEvent(new PublicPlateFeeSnapshotEvent(List.copyOf(sessionIds)));
         }
         return new PlateFeeQuoteView(plate, items, total, snapshot.colors());
+    }
+
+    /**
+     * C 端查费后异步调用：按当前计费规则重算并回写流水应收快照（金额未变则跳过）。
+     * 供 {@link PublicPlateFeeSnapshotListener} 在查费事务提交后执行。
+     */
+    @Transactional
+    public void refreshFeeSnapshotsAfterPublicQuery(Collection<Long> sessionIds) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return;
+        }
+        // 去重，保持稳定顺序
+        Set<Long> unique = new LinkedHashSet<>();
+        for (Long id : sessionIds) {
+            if (id != null) {
+                unique.add(id);
+            }
+        }
+        for (Long sessionId : unique) {
+            ParkingSession session = sessions.findById(sessionId).orElse(null);
+            if (session == null || session.getStatus() == ParkingSessionStatus.VOIDED) {
+                continue;
+            }
+            if (session.getEntryTime() == null) {
+                continue;
+            }
+            if (session.getStatus() == ParkingSessionStatus.CLOSED
+                    && (session.getExitTime() == null
+                    || !session.getExitTime().isAfter(session.getEntryTime()))) {
+                continue;
+            }
+            BigDecimal next = computeFee(session);
+            if (sameMoney(session.getFeeYuan(), next)) {
+                continue;
+            }
+            session.setFeeYuan(next);
+            saveAndPush(session);
+        }
+    }
+
+    private static boolean sameMoney(BigDecimal left, BigDecimal right) {
+        if (left == null && right == null) {
+            return true;
+        }
+        if (left == null || right == null) {
+            return false;
+        }
+        return left.compareTo(right) == 0;
     }
 
     /**
@@ -673,6 +736,49 @@ public class ParkingSessionService {
         session.setPaidAmountYuan(session.paidAmountOrZero().add(paidAmount));
         session.syncPayStatusFromMoney();
         return saveAndPush(session);
+    }
+
+    /**
+     * 缴费离场：欠费拦截后开闸放行，把该出口通道所属车场的在场流水补成已出场。
+     * 拦截当时不上报离场；入口欠费放行不关场。
+     */
+    @Transactional
+    public void closeOpenSessionsAfterPaidExit(String plateNumber, PlateColor plateColor,
+                                               List<ParkingLane> waitingLanes) {
+        if (!StringUtils.hasText(plateNumber) || waitingLanes == null || waitingLanes.isEmpty()) {
+            return;
+        }
+        String plate = plateNumber.trim().toUpperCase();
+        LocalDateTime exitTime = SiteZoneTimes.nowUtc();
+        Set<Long> closedLots = new LinkedHashSet<>();
+        for (ParkingLane lane : waitingLanes) {
+            if (lane == null || lane.getLaneType() == LaneType.ENTRANCE || lane.getLot() == null) {
+                continue;
+            }
+            Long lotId = lane.getLot().getId();
+            if (lotId == null || !closedLots.add(lotId)) {
+                continue;
+            }
+            List<ParkingSession> opens = sessions.findAllByLotIdAndPlateNumberIgnoreCaseAndStatus(
+                    lotId, plate, ParkingSessionStatus.OPEN);
+            for (ParkingSession session : opens) {
+                if (plateColor != null
+                        && session.getPlateColor() != null
+                        && plateColor != session.getPlateColor()) {
+                    continue;
+                }
+                LocalDateTime at = exitTime;
+                if (session.getEntryTime() != null && !at.isAfter(session.getEntryTime())) {
+                    at = session.getEntryTime().plusMinutes(1);
+                }
+                session.closeWithExit(at, lane.getId(), lane.getName(), null, null);
+                refreshFee(session);
+                session.syncPayStatusFromMoney();
+                saveAndPush(session);
+                log.info("缴费离场已补出场 sessionId={} plate={} lot={} lane={}",
+                        session.getId(), plate, session.getLotId(), lane.getCode());
+            }
+        }
     }
 
     /**

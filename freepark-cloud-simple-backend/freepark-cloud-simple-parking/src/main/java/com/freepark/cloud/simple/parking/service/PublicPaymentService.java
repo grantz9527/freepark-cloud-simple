@@ -73,6 +73,7 @@ public class PublicPaymentService {
     private final AlipayWapPayClient alipayWap;
     private final ApplicationEventPublisher events;
     private final Environment environment;
+    private final EdgeLaneWaitService laneWait;
 
     /** 是否允许本地联调确认：渠道未接入或凭据不全时可用。 */
     @Value("${freepark.payment.mock-enabled:true}")
@@ -97,7 +98,8 @@ public class PublicPaymentService {
                                 AlipayConfigService alipayConfig,
                                 AlipayWapPayClient alipayWap,
                                 ApplicationEventPublisher events,
-                                Environment environment) {
+                                Environment environment,
+                                EdgeLaneWaitService laneWait) {
         this.payments = payments;
         this.orders = orders;
         this.orderService = orderService;
@@ -111,6 +113,7 @@ public class PublicPaymentService {
         this.alipayWap = alipayWap;
         this.events = events;
         this.environment = environment;
+        this.laneWait = laneWait;
     }
 
     /**
@@ -289,6 +292,10 @@ public class PublicPaymentService {
         payRecordService.markPaySuccess(payment.getPayNo(), transactionId, payTime);
         events.publishEvent(new PaymentSettledEvent(
                 payment.getPayNo(), payment.getPlateNumber(), payment.getPlateColor()));
+        sessionService.closeOpenSessionsAfterPaidExit(
+                payment.getPlateNumber(),
+                payment.getPlateColor(),
+                laneWait.findPayableWaitLanes(payment.getPlateNumber(), payment.getPlateColor()));
     }
 
     /** 关闭缴款单（用户主动放弃 / 重新发起）：释放其拆分订单。 */

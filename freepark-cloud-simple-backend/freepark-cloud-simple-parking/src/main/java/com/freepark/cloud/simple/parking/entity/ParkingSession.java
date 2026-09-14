@@ -88,8 +88,8 @@ public class ParkingSession {
     private String exitImage;
 
     /**
-     * 应收金额快照（元）：仅在新增加场关联的写事件（入场/出入场更新）或手动「重新算费」时，
-     * 按「车场 × 车牌颜色 × 入场日期」生效的计费绑定结算并落库；未计费为 null，列表查询不重算。
+     * 应收金额快照（元）：入场/出入场更新、手动「重新算费」，以及 C 端按车牌查费后的异步回写会刷新；
+     * 未计费为 null，列表查询不重算。
      */
     @Column(precision = 10, scale = 2)
     private BigDecimal feeYuan;

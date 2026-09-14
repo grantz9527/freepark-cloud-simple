@@ -2,13 +2,14 @@ package com.freepark.cloud.simple.parking.edge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.freepark.cloud.simple.parking.entity.ParkingLane;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
 import com.freepark.cloud.simple.parking.entity.ParkingOrder;
-import com.freepark.cloud.simple.parking.entity.ParkingOrderStatus;
 import com.freepark.cloud.simple.parking.entity.PlateColor;
 import com.freepark.cloud.simple.parking.event.PaymentSettledEvent;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingOrderRepository;
+import com.freepark.cloud.simple.parking.service.EdgeLaneWaitService;
 import com.freepark.cloud.simple.settings.entity.EdgeMqttConfig;
 import com.freepark.cloud.simple.settings.runtime.EdgeGateCommandProtocol;
 import com.freepark.cloud.simple.settings.runtime.EdgeMqttConnectionManager;
@@ -22,34 +23,38 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * 缴费入账成功后，向相关边缘节点 MQTT 下发开闸指令 {@code edge.gate.command/1}。
+ * 缴费入账成功后，向边缘下发开闸指令 {@code edge.gate.command/1}。
  *
- * <p>必须在事务提交之后发布，避免边缘收到指令后立刻回查欠费仍看到未入账金额。
- * 主题 {@code {commandPublishPrefix}/{nodeCode}}，由车场 {@code edgeNodeCode} 定位节点；
- * 未绑定边缘节点的车场跳过。</p>
+ * <p>欠费拦截不上报离场：等待来自识别算费（带通道编码）。优先开仍在 15 分钟内等待该车牌的通道；
+ * 没有等待时回退为向本缴款单涉及车场绑定的节点发车牌开闸，由边缘按本地最新欠费拦截识别匹配。
+ * 必须在事务提交之后发布，避免边缘回查欠费仍看到未入账金额。</p>
  */
 @Component
 public class EdgeGateCommandPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(EdgeGateCommandPublisher.class);
 
+    private final EdgeLaneWaitService laneWait;
     private final ParkingOrderRepository orders;
     private final ParkingLotRepository lots;
     private final EdgeMqttConfigService mqttConfig;
     private final EdgeMqttConnectionManager mqtt;
     private final ObjectMapper objectMapper;
 
-    public EdgeGateCommandPublisher(ParkingOrderRepository orders,
+    public EdgeGateCommandPublisher(EdgeLaneWaitService laneWait,
+                                    ParkingOrderRepository orders,
                                     ParkingLotRepository lots,
                                     EdgeMqttConfigService mqttConfig,
                                     EdgeMqttConnectionManager mqtt,
                                     ObjectMapper objectMapper) {
+        this.laneWait = laneWait;
         this.orders = orders;
         this.lots = lots;
         this.mqttConfig = mqttConfig;
@@ -79,54 +84,75 @@ public class EdgeGateCommandPublisher {
             log.warn("边缘 MQTT 未连接，跳过缴费开闸 payNo={} plate={}", event.payNo(), event.plateNumber());
             return;
         }
+        List<ParkingLane> waiting = laneWait.findPayableWaitLanes(event.plateNumber(), event.plateColor());
         String prefix = EdgeMqttConfigOptions.commandPublishPrefix(config.getCommandPublishTopic());
-        List<ParkingOrder> paid = orders.findByPaymentNoAndStatus(event.payNo(), ParkingOrderStatus.PAID);
-        Map<String, ParkingLot> lotsByKey = new LinkedHashMap<>();
-        for (ParkingOrder order : paid) {
-            Long lotId = order.getLotId();
-            if (lotId == null) {
-                continue;
+        if (!waiting.isEmpty()) {
+            for (ParkingLane lane : waiting) {
+                ParkingLot lot = lane.getLot();
+                String nodeCode = lot.getEdgeNodeCode().trim();
+                if (!isTopicSafe(nodeCode)) {
+                    log.warn("缴费开闸跳过非法节点编号 lane={} nodeCode={}", lane.getCode(), nodeCode);
+                    continue;
+                }
+                if (publishOpen(prefix, nodeCode, lot.getCode(), lane, event, config.getQos())) {
+                    laneWait.clearWait(lane.getId());
+                }
             }
-            ParkingLot lot = lots.findById(lotId).orElse(null);
-            if (lot == null || !StringUtils.hasText(lot.getEdgeNodeCode()) || !StringUtils.hasText(lot.getCode())) {
-                continue;
-            }
+            return;
+        }
+        List<ParkingLot> fallbackLots = lotsForPayment(event.payNo());
+        if (fallbackLots.isEmpty()) {
+            log.info("缴费开闸无匹配通道（算费未登记等待，缴款单也无绑定节点） payNo={} plate={}",
+                    event.payNo(), event.plateNumber());
+            return;
+        }
+        for (ParkingLot lot : fallbackLots) {
             String nodeCode = lot.getEdgeNodeCode().trim();
             if (!isTopicSafe(nodeCode)) {
                 log.warn("缴费开闸跳过非法节点编号 lot={} nodeCode={}", lot.getCode(), nodeCode);
                 continue;
             }
-            lotsByKey.putIfAbsent(nodeCode + "\n" + lot.getCode(), lot);
-        }
-        if (lotsByKey.isEmpty()) {
-            log.info("缴费开闸无绑定边缘节点的车场 payNo={} plate={}", event.payNo(), event.plateNumber());
-            return;
-        }
-        for (ParkingLot lot : lotsByKey.values()) {
-            publishOpen(prefix, lot.getEdgeNodeCode().trim(), lot.getCode(), event, config.getQos());
+            publishOpen(prefix, nodeCode, lot.getCode(), null, event, config.getQos());
         }
     }
 
-    private void publishOpen(String prefix, String nodeCode, String lotCode,
-                             PaymentSettledEvent event, int qos) {
+    private List<ParkingLot> lotsForPayment(String payNo) {
+        Map<Long, ParkingLot> unique = new LinkedHashMap<>();
+        for (ParkingOrder order : orders.findByPaymentNoOrderByIdAsc(payNo)) {
+            if (order.getLotId() == null || unique.containsKey(order.getLotId())) {
+                continue;
+            }
+            lots.findById(order.getLotId()).ifPresent(lot -> {
+                if (StringUtils.hasText(lot.getEdgeNodeCode()) && StringUtils.hasText(lot.getCode())) {
+                    unique.put(lot.getId(), lot);
+                }
+            });
+        }
+        return new ArrayList<>(unique.values());
+    }
+
+    private boolean publishOpen(String prefix, String nodeCode, String lotCode,
+                                ParkingLane lane, PaymentSettledEvent event, int qos) {
         String topic = prefix + "/" + nodeCode;
         if (topic.length() > EdgeMqttConfigOptions.MAX_TOPIC_LENGTH) {
             log.warn("缴费开闸主题超长，跳过 node={} topicLen={}", nodeCode, topic.length());
-            return;
+            return false;
         }
-        byte[] payload = serialize(nodeCode, lotCode, event);
+        byte[] payload = serialize(nodeCode, lotCode, lane, event);
         if (payload == null) {
-            return;
+            return false;
         }
         if (!mqtt.publish(topic, payload, qos, false)) {
-            log.warn("缴费开闸 MQTT 发布失败 topic={} payNo={} plate={}", topic, event.payNo(), event.plateNumber());
-            return;
+            log.warn("缴费开闸 MQTT 发布失败 topic={} payNo={} plate={} lane={}",
+                    topic, event.payNo(), event.plateNumber(), lane == null ? null : lane.getCode());
+            return false;
         }
-        log.info("已下发缴费开闸指令 topic={} payNo={} plate={} lot={}",
-                topic, event.payNo(), event.plateNumber(), lotCode);
+        log.info("已下发缴费开闸指令 topic={} payNo={} plate={} lot={} lane={}",
+                topic, event.payNo(), event.plateNumber(), lotCode, lane == null ? null : lane.getCode());
+        return true;
     }
 
-    private byte[] serialize(String nodeCode, String lotCode, PaymentSettledEvent event) {
+    private byte[] serialize(String nodeCode, String lotCode, ParkingLane lane, PaymentSettledEvent event) {
         try {
             ObjectNode root = objectMapper.createObjectNode();
             root.put("schema", EdgeGateCommandProtocol.SCHEMA);
@@ -136,10 +162,19 @@ public class EdgeGateCommandPublisher {
             root.put("reason", EdgeGateCommandProtocol.REASON_PAYMENT);
             root.put("plate", event.plateNumber());
             PlateColor color = event.plateColor();
+            if (color == null && lane != null) {
+                color = lane.getWaitPlateColor();
+            }
             if (color != null) {
                 root.put("plateColor", color.name());
             }
             root.put("lotCode", lotCode);
+            if (lane != null && StringUtils.hasText(lane.getCode())) {
+                root.put("laneCode", lane.getCode());
+            }
+            if (lane != null && StringUtils.hasText(lane.getWaitRecognitionId())) {
+                root.put("recognitionId", lane.getWaitRecognitionId());
+            }
             root.put("payNo", event.payNo());
             root.put("issuedAt", Instant.now().toString());
             return objectMapper.writeValueAsBytes(root);
