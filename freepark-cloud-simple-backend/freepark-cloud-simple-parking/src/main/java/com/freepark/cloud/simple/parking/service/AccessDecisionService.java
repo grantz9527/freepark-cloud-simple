@@ -10,12 +10,14 @@ import com.freepark.cloud.simple.parking.entity.AccessJudgmentRuleType;
 import com.freepark.cloud.simple.parking.entity.LotType;
 import com.freepark.cloud.simple.parking.entity.ParkingLane;
 import com.freepark.cloud.simple.parking.entity.ParkingLot;
+import com.freepark.cloud.simple.parking.entity.ParkingSessionStatus;
 import com.freepark.cloud.simple.parking.entity.PatternAllowlist;
 import com.freepark.cloud.simple.parking.entity.PlateColor;
 import com.freepark.cloud.simple.parking.repository.BlacklistVehicleRepository;
 import com.freepark.cloud.simple.parking.repository.InternalVehicleRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingLaneRepository;
 import com.freepark.cloud.simple.parking.repository.ParkingLotRepository;
+import com.freepark.cloud.simple.parking.repository.ParkingSessionRepository;
 import com.freepark.cloud.simple.parking.repository.PatternAllowlistRepository;
 import com.freepark.cloud.simple.parking.repository.WhitelistVehicleRepository;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,8 @@ import java.util.regex.PatternSyntaxException;
  *
  * <p>判定顺序：
  * <ol>
+ *   <li>入口启用满位拦截且在场流水数达到车位总数时禁止入场（白名单/号段不可绕过；
+ *       总车位为 0 不拦截；该车牌已有在场流水则不重复拦截）。</li>
  *   <li>按车场配置的判定顺序执行，首个命中的规则直接决定结果。</li>
  *   <li>内部车场入场要求车牌已登记为内部车辆。</li>
  *   <li>通道（调用方）配置的拦截车牌颜色命中则拦截。</li>
@@ -45,19 +49,22 @@ public class AccessDecisionService {
     private final WhitelistVehicleRepository whitelistVehicles;
     private final BlacklistVehicleRepository blacklistVehicles;
     private final PatternAllowlistRepository patternAllowlist;
+    private final ParkingSessionRepository sessions;
 
     public AccessDecisionService(ParkingLotRepository lots,
                                  ParkingLaneRepository lanes,
                                  InternalVehicleRepository internalVehicles,
                                  WhitelistVehicleRepository whitelistVehicles,
                                  BlacklistVehicleRepository blacklistVehicles,
-                                 PatternAllowlistRepository patternAllowlist) {
+                                 PatternAllowlistRepository patternAllowlist,
+                                 ParkingSessionRepository sessions) {
         this.lots = lots;
         this.lanes = lanes;
         this.internalVehicles = internalVehicles;
         this.whitelistVehicles = whitelistVehicles;
         this.blacklistVehicles = blacklistVehicles;
         this.patternAllowlist = patternAllowlist;
+        this.sessions = sessions;
     }
 
     @Transactional(readOnly = true)
@@ -75,6 +82,10 @@ public class AccessDecisionService {
         boolean blacklisted = isListedBlack(lotId, plate, color);
         boolean interceptBlacklisted = isEntry ? lot.isEntryInterceptBlacklist() : lot.isExitInterceptBlacklist();
         boolean patternMatched = matchesPattern(lotId, plate);
+
+        if (isEntry && lot.isEntryInterceptFull() && isLotFull(lot, plate)) {
+            return AccessDecisionView.intercepted("lot_full");
+        }
 
         for (AccessJudgmentRuleType rule : lot.effectiveJudgmentOrder()) {
             if (rule == AccessJudgmentRuleType.WHITELIST && whitelisted) {
@@ -108,6 +119,22 @@ public class AccessDecisionService {
         }
 
         return AccessDecisionView.allowed("");
+    }
+
+    /**
+     * 满位：总车位 &gt; 0 且在场流水数达到总车位。已在场的车牌再次识别不拦截。
+     */
+    private boolean isLotFull(ParkingLot lot, String plate) {
+        int totalSpaces = lot.getTotalSpaces();
+        if (totalSpaces <= 0) {
+            return false;
+        }
+        long openCount = sessions.countByLotIdAndStatus(lot.getId(), ParkingSessionStatus.OPEN);
+        if (openCount < totalSpaces) {
+            return false;
+        }
+        return !sessions.existsByLotIdAndPlateNumberIgnoreCaseAndStatus(
+                lot.getId(), plate, ParkingSessionStatus.OPEN);
     }
 
     private boolean isListedBlack(Long lotId, String plate, PlateColor color) {

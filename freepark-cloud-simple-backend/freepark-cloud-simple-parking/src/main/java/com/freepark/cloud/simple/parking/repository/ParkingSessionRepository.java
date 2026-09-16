@@ -13,6 +13,8 @@ public interface ParkingSessionRepository
 
     boolean existsByLotIdAndPlateNumberIgnoreCaseAndStatus(Long lotId, String plate, ParkingSessionStatus status);
 
+    long countByLotIdAndStatus(Long lotId, ParkingSessionStatus status);
+
     Optional<ParkingSession> findFirstByLotIdAndPlateNumberIgnoreCaseAndStatusOrderByEntryTimeDesc(
             Long lotId, String plate, ParkingSessionStatus status);
 

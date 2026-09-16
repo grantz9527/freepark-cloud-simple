@@ -9,5 +9,8 @@ public enum InterceptRuleType {
     ARREARS,
 
     /** 黑名单拦截 */
-    BLACKLIST
+    BLACKLIST,
+
+    /** 满位拦截（仅入口：在场车辆数达到车位总数时禁止入场） */
+    FULL
 }

@@ -45,6 +45,7 @@ final class EdgeDomainItems {
         node.put("enabled", lot.isEnabled());
         node.put("entryInterceptArrears", lot.isEntryInterceptArrears());
         node.put("entryInterceptBlacklist", lot.isEntryInterceptBlacklist());
+        node.put("entryInterceptFull", lot.isEntryInterceptFull());
         node.put("exitInterceptArrears", lot.isExitInterceptArrears());
         node.put("exitInterceptBlacklist", lot.isExitInterceptBlacklist());
         ArrayNode judgmentOrder = node.putArray("judgmentOrder");

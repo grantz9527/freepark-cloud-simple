@@ -64,6 +64,10 @@ public class ParkingLot {
     @Column(nullable = false)
     private boolean entryInterceptBlacklist = false;
 
+    /** 入场满位拦截：在场车辆数达到车位总数时禁止入场 */
+    @Column(nullable = false)
+    private boolean entryInterceptFull = false;
+
     /** 出场拦截欠费车辆 */
     @Column(nullable = false)
     private boolean exitInterceptArrears = false;
@@ -206,6 +210,14 @@ public class ParkingLot {
 
     public void setEntryInterceptBlacklist(boolean entryInterceptBlacklist) {
         this.entryInterceptBlacklist = entryInterceptBlacklist;
+    }
+
+    public boolean isEntryInterceptFull() {
+        return entryInterceptFull;
+    }
+
+    public void setEntryInterceptFull(boolean entryInterceptFull) {
+        this.entryInterceptFull = entryInterceptFull;
     }
 
     public boolean isExitInterceptArrears() {

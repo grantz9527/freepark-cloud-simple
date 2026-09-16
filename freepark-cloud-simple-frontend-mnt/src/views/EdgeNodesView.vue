@@ -25,6 +25,19 @@ const d: BiDict = {
   disabled: { 'zh-CN': '停用', en: 'Disabled' },
   edit: { 'zh-CN': '编辑', en: 'Edit' },
   bindLots: { 'zh-CN': '绑定车场', en: 'Bind lots' },
+  syncNow: { 'zh-CN': '马上同步', en: 'Sync now' },
+  syncSuccess: {
+    'zh-CN': '已向“{name}”下发全量配置（{frames} 帧）',
+    en: 'Full config sent to "{name}" ({frames} frames)'
+  },
+  syncEmpty: {
+    'zh-CN': '未下发：请确认边缘计算 MQTT 已启用、配置同步主题已填写，且该节点已启用。',
+    en: 'Nothing sent. Enable MQTT, set the config-sync topic, and make sure this node is enabled.'
+  },
+  syncDisabledHint: {
+    'zh-CN': '停用的节点不会作为同步目标，请先启用。',
+    en: 'Disabled nodes are not sync targets. Enable the node first.'
+  },
   delete: { 'zh-CN': '删除', en: 'Delete' },
   expandHint: { 'zh-CN': '展开查看名下车场', en: 'Expand to view lots' },
   noLots: { 'zh-CN': '未绑定车场', en: 'No lots bound' },
@@ -114,6 +127,11 @@ interface EdgeNodeItem {
 interface LotItem {
   code: string
   name: string
+}
+
+interface SyncSummary {
+  nodes: number
+  frames: number
 }
 
 const loading = ref(false)
@@ -221,6 +239,35 @@ async function saveEditor() {
     ElMessage.error(error instanceof Error && error.message ? error.message : t('refresh'))
   } finally {
     saving.value = false
+  }
+}
+
+/* ---------------- 马上同步 ---------------- */
+
+const syncingCode = ref<string | null>(null)
+
+async function syncNow(row: EdgeNodeItem) {
+  if (!row.enabled || syncingCode.value) {
+    return
+  }
+  syncingCode.value = row.code
+  try {
+    const summary = await request.post<never, SyncSummary>(
+      `/system/edge-mqtt/config-sync/nodes/${encodeURIComponent(row.code)}`,
+      null,
+      { timeout: 30000 }
+    )
+    if (!summary || summary.nodes <= 0 || summary.frames <= 0) {
+      ElMessage.warning(t('syncEmpty'))
+      return
+    }
+    ElMessage.success(
+      t('syncSuccess').replace('{name}', row.name).replace('{frames}', String(summary.frames))
+    )
+  } catch (error) {
+    ElMessage.error(error instanceof Error && error.message ? error.message : t('syncNow'))
+  } finally {
+    syncingCode.value = null
   }
 }
 
@@ -407,8 +454,25 @@ onMounted(loadList)
           <el-table-column :label="t('colCreatedAt')" min-width="170">
             <template #default="{ row }">{{ formatTime((row as EdgeNodeItem).createdAt) }}</template>
           </el-table-column>
-          <el-table-column :label="t('colActions')" width="220" fixed="right">
+          <el-table-column :label="t('colActions')" width="300" fixed="right">
             <template #default="{ row }">
+              <el-tooltip
+                :disabled="(row as EdgeNodeItem).enabled"
+                :content="t('syncDisabledHint')"
+                placement="top"
+              >
+                <span>
+                  <el-button
+                    link
+                    type="primary"
+                    :loading="syncingCode === (row as EdgeNodeItem).code"
+                    :disabled="!(row as EdgeNodeItem).enabled || !!syncingCode"
+                    @click="syncNow(row as EdgeNodeItem)"
+                  >
+                    {{ t('syncNow') }}
+                  </el-button>
+                </span>
+              </el-tooltip>
               <el-button link type="primary" @click="openEditDialog(row as EdgeNodeItem)">
                 {{ t('edit') }}
               </el-button>

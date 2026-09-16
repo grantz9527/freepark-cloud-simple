@@ -9,9 +9,10 @@ type JudgmentRule = 'BLACKLIST' | 'WHITELIST' | 'PATTERN_ALLOWLIST'
 
 const DEFAULT_JUDGE_ORDER: JudgmentRule[] = ['BLACKLIST', 'WHITELIST', 'PATTERN_ALLOWLIST']
 
-type InterceptRule = 'ARREARS' | 'BLACKLIST'
+type InterceptRule = 'ARREARS' | 'BLACKLIST' | 'FULL'
 
-const INTERCEPT_RULES: InterceptRule[] = ['ARREARS', 'BLACKLIST']
+const ENTRY_INTERCEPT_RULES: InterceptRule[] = ['ARREARS', 'BLACKLIST', 'FULL']
+const EXIT_INTERCEPT_RULES: InterceptRule[] = ['ARREARS', 'BLACKLIST']
 
 const d: BiDict = {
   lotLabel: { 'zh-CN': '停车场', en: 'Parking Lot' },
@@ -52,6 +53,7 @@ const d: BiDict = {
   interceptNoChange: { 'zh-CN': '拦截规则尚未调整', en: 'No changes yet' },
   'intercept.ARREARS': { 'zh-CN': '欠费拦截', en: 'Arrears Intercept' },
   'intercept.BLACKLIST': { 'zh-CN': '黑名单拦截', en: 'Blacklist Intercept' },
+  'intercept.FULL': { 'zh-CN': '满位拦截', en: 'Full Occupancy Intercept' },
   'judgeRule.BLACKLIST': { 'zh-CN': '黑名单', en: 'Blacklist' },
   'judgeRule.WHITELIST': { 'zh-CN': '白名单', en: 'Whitelist' },
   'judgeRule.PATTERN_ALLOWLIST': { 'zh-CN': '正则名单', en: 'Pattern Allowlist' },
@@ -126,11 +128,11 @@ function normalizeOrder(order?: JudgmentRule[] | null): JudgmentRule[] {
   return [...DEFAULT_JUDGE_ORDER]
 }
 
-function normalizeRules(value?: InterceptRule[] | null): InterceptRule[] {
+function normalizeRules(value: InterceptRule[] | null | undefined, allowed: InterceptRule[]): InterceptRule[] {
   if (!value) {
     return []
   }
-  return value.filter((rule) => (INTERCEPT_RULES as string[]).includes(rule))
+  return value.filter((rule) => (allowed as string[]).includes(rule))
 }
 
 /* ---------------- 车场加载与切换 ---------------- */
@@ -168,8 +170,8 @@ async function loadConfigs() {
       )
     ])
     ruleOrder.value = normalizeOrder(judgment.ruleOrder)
-    entryRules.value = normalizeRules(intercept.entryRules)
-    exitRules.value = normalizeRules(intercept.exitRules)
+    entryRules.value = normalizeRules(intercept.entryRules, ENTRY_INTERCEPT_RULES)
+    exitRules.value = normalizeRules(intercept.exitRules, EXIT_INTERCEPT_RULES)
     orderDirty.value = false
     interceptDirty.value = false
   } catch (error) {
@@ -288,12 +290,12 @@ async function saveOrder() {
 /* ---------------- 出入口拦截 ---------------- */
 
 function onEntryChange(value: unknown) {
-  entryRules.value = Array.isArray(value) ? normalizeRules(value as InterceptRule[]) : []
+  entryRules.value = Array.isArray(value) ? normalizeRules(value as InterceptRule[], ENTRY_INTERCEPT_RULES) : []
   interceptDirty.value = true
 }
 
 function onExitChange(value: unknown) {
-  exitRules.value = Array.isArray(value) ? normalizeRules(value as InterceptRule[]) : []
+  exitRules.value = Array.isArray(value) ? normalizeRules(value as InterceptRule[], EXIT_INTERCEPT_RULES) : []
   interceptDirty.value = true
 }
 
@@ -310,8 +312,8 @@ async function saveIntercept() {
       entryRules: [...entryRules.value],
       exitRules: [...exitRules.value]
     })
-    entryRules.value = normalizeRules(data.entryRules)
-    exitRules.value = normalizeRules(data.exitRules)
+    entryRules.value = normalizeRules(data.entryRules, ENTRY_INTERCEPT_RULES)
+    exitRules.value = normalizeRules(data.exitRules, EXIT_INTERCEPT_RULES)
     interceptDirty.value = false
     ElMessage.success(t('msgSaveOk'))
   } catch (error) {
@@ -443,7 +445,7 @@ onMounted(async () => {
             <p class="box-hint">{{ t('groupEntryHint') }}</p>
             <el-checkbox-group :model-value="entryRules" @update:model-value="onEntryChange">
               <el-checkbox
-                v-for="rule in INTERCEPT_RULES"
+                v-for="rule in ENTRY_INTERCEPT_RULES"
                 :key="rule"
                 :value="rule"
                 border
@@ -458,7 +460,7 @@ onMounted(async () => {
             <p class="box-hint">{{ t('groupExitHint') }}</p>
             <el-checkbox-group :model-value="exitRules" @update:model-value="onExitChange">
               <el-checkbox
-                v-for="rule in INTERCEPT_RULES"
+                v-for="rule in EXIT_INTERCEPT_RULES"
                 :key="rule"
                 :value="rule"
                 border

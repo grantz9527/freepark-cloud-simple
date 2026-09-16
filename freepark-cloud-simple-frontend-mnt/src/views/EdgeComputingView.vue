@@ -38,10 +38,10 @@ const d: BiDict = {
   reportSubscribeTopic: { 'zh-CN': '上报数据订阅主题', en: 'Report data subscribe topic' },
   reportSubscribeTopicPlaceholder: { 'zh-CN': '如 parking/report/#（与本地“上报主题前缀”一致，末尾加 /#）', en: 'e.g. parking/report/# (match the local report topic prefix, append /#)' },
   configSyncPublishTopic: { 'zh-CN': '配置同步发布主题前缀', en: 'Config sync publish topic prefix' },
-  configSyncPublishTopicPlaceholder: { 'zh-CN': '如 cloud/config/sync（云端自动拼接 /节点编号）', en: 'e.g. cloud/config/sync (node code appended)' },
+  configSyncPublishTopicPlaceholder: { 'zh-CN': '如 parking/config-sync（云端自动拼接 /节点编号）', en: 'e.g. parking/config-sync (node code appended)' },
   configSyncPublishTopicHint: {
-    'zh-CN': '不允许包含空格或 MQTT 通配符（# / +），末尾的 / 会被自动去掉。',
-    en: 'Whitespace and MQTT wildcards (# / +) are not allowed; a trailing / is trimmed automatically.'
+    'zh-CN': '须与场端「配置同步订阅主题前缀」完全一致。不允许包含空格或 MQTT 通配符（# / +），末尾的 / 会被自动去掉。',
+    en: 'Must match the edge “Config-sync subscribe prefix”. Whitespace and MQTT wildcards (# / +) are not allowed; a trailing / is trimmed automatically.'
   },
   commandPublishTopic: { 'zh-CN': '开闸指令发布主题前缀', en: 'Gate command publish topic prefix' },
   commandPublishTopicPlaceholder: { 'zh-CN': '如 parking/command（云端自动拼接 /节点编号）', en: 'e.g. parking/command (node code appended)' },
@@ -142,7 +142,7 @@ const qosOptions = [0, 1, 2]
 
 // 留空时自动补用的默认主题参数
 const DEFAULT_REPORT_TOPIC = 'parking/report/#'
-const DEFAULT_CONFIG_SYNC_PREFIX = 'cloud/config/sync'
+const DEFAULT_CONFIG_SYNC_PREFIX = 'parking/config-sync'
 const DEFAULT_COMMAND_PREFIX = 'parking/command'
 
 function emptyToNull(value: string): string | null {

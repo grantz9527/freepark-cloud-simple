@@ -112,6 +112,7 @@ public class ParkingLotService {
         List<InterceptRuleType> exitRules = request.exitRules() == null ? List.of() : request.exitRules();
         lot.setEntryInterceptArrears(entryRules.contains(InterceptRuleType.ARREARS));
         lot.setEntryInterceptBlacklist(entryRules.contains(InterceptRuleType.BLACKLIST));
+        lot.setEntryInterceptFull(entryRules.contains(InterceptRuleType.FULL));
         lot.setExitInterceptArrears(exitRules.contains(InterceptRuleType.ARREARS));
         lot.setExitInterceptBlacklist(exitRules.contains(InterceptRuleType.BLACKLIST));
         ParkingLot saved = lots.save(lot);
