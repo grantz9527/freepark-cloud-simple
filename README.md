@@ -4,6 +4,14 @@ Cloud counterpart of FreePark edge: a parking **cloud platform** for lot configu
 
 FreePark 的云端配套：**智慧停车场云平台**，负责车场配置、通行规则、计费支付，以及与场端边缘节点的同步。
 
+## Product Preview / 界面预览
+
+![Admin console / 管理后台](product_imgs/mnt-1.png)
+
+![User portal — lookup / 用户端查费](product_imgs/user-1.jpg)
+
+![User portal — quote / 用户端费用](product_imgs/user-2.jpg)
+
 ## What is it / 项目定位
 
 This repository is the **cloud** side of FreePark. The management console (`frontend-mnt`) and the driver-facing portal (`frontend-user`) talk to a Spring Boot API. Site gates still run on the on-premise edge (`local_server` + `local_frontend`); the cloud pushes lot config over MQTT and receives heartbeats, parking sessions, and gate-open commands.
