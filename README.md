@@ -23,6 +23,10 @@ This repository is the **cloud** side of FreePark. The management console (`fron
 
 **若只需场端通行、暂不需要云端收费**，可单独使用边缘仓库。本云端仓库补充多车场管理、欠费 / 满位拦截策略、算费、微信支付 / 支付宝，以及边缘节点管理。
 
+The **edge computing** stack (recognition, barriers, local access loop) lives in the **[freepark](https://gitee.com/g20/freepark)** repository — clone that project for site-side code.
+
+**边缘计算**（识别、道闸、场端闭环）请到 **[freepark](https://gitee.com/g20/freepark)** 仓库拉取代码。
+
 ## Built with AI / 由 AI 驱动构建
 
 This project is an **attempt to be built by AI**: we strive to let AI write the code while humans focus on requirements, design decisions, and review — minimizing hand-written code as much as possible.
@@ -145,15 +149,27 @@ Override via `freepark.user.init.username` / `freepark.user.init.password`. **Ch
 
 ## Status / 当前状态
 
-FreePark Cloud Simple is **still under active development**. A runnable prototype is in place for multi-lot admin, whitelist / blacklist / pattern allowlist, entry intercepts (arrears, blacklist, full occupancy), parking sessions, billing, payments, and MQTT sync with edge nodes. Features and fixes are landing continuously; no stable release yet.
+**AI mode is still under development.** Everything else is largely complete and awaiting test confirmation.
 
-FreePark Cloud Simple **仍在积极开发中**。目前已具备可运行雏形：多车场管理、白名单 / 黑名单 / 正则名单、入口拦截（欠费、黑名单、满位）、停车流水、计费支付，以及与边缘节点的 MQTT 同步。功能与修复持续更新中，尚未发布稳定版本。
+**「AI 模式」仍在开发中。** 其余功能基本完成，待测试确认。
+
+This build is aimed at **residential communities**. In practice, older neighborhoods rarely need complex parking products; the current feature set is generally enough for that scene. **Coupons, parking cards, and a related mobile management app** will come in later versions.
+
+本版本面向**小区停车**。实际场景中，老旧小区基本不会有复杂的业务需求，目前功能已经够用。**优惠券、停车卡，以及相关手机管理端**会在后续版本中加入。
+
+This project **does not pursue a SaaS model**. AI-assisted programming will keep raising delivery speed; a hosted multi-tenant SaaS no longer looks like an advantage.
+
+本项目**放弃了 SaaS 模式**。考虑到未来 AI 编程会极大提升效率，SaaS 已经不具有优势。
 
 ## Support / 支持
 
 If you find this project helpful, please give me a **star**. Your support is my greatest motivation to keep building.
 
 如果觉得本项目对您有帮助，请给我一个 **star**，您的支持是我持续开发的动力。
+
+Need **custom development**? Contact me: **+86 13912730490** (WeChat / WhatsApp, same number).
+
+如需**定制化开发**可联系我：**+86-13912730490**（微信、WhatsApp 同步）。
 
 ## Contributing / 参与
 
