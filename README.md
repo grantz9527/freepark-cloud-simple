@@ -8,9 +8,10 @@ FreePark 的云端配套：**智慧停车场云平台**，负责车场配置、�
 
 ![Admin console / 管理后台](product_imgs/mnt-1.png)
 
-![User portal — lookup / 用户端查费](product_imgs/user-1.jpg)
-
-![User portal — quote / 用户端费用](product_imgs/user-2.jpg)
+<p>
+  <img src="product_imgs/user-1.jpg" alt="User portal — lookup / 用户端查费" width="280" />
+  <img src="product_imgs/user-2.jpg" alt="User portal — quote / 用户端费用" width="280" />
+</p>
 
 ## What is it / 项目定位
 
